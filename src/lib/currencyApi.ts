@@ -9,7 +9,7 @@
 // lookup is always current and needs zero upkeep.
 // ============================================================
 
-import type { CurrencyCode } from "./tripModel";
+import type { CurrencyCode } from "../model/trip";
 
 /** In-memory only — a planning session looks up the same country
  * (e.g. every leg/stay in Portugal) repeatedly. */

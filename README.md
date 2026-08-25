@@ -19,14 +19,15 @@ not invented data.
 | Step | What                                                           | State       |
 | ---- | -------------------------------------------------------------- | ----------- |
 | 1    | Core data model (`trip-model.ts`)                              | **Done**    |
-| 2    | MapLibre renderer — mode-aware leg rendering                   | Next        |
+| 2    | MapLibre renderer — mode-aware leg rendering                   | **Done**    |
 | 3    | Itinerary editor UI (add/edit/reorder legs, stays, activities) | Not started |
 | 4    | Cost rollup + multi-currency display                           | Not started |
 | 5    | External data: flight pricing, attractions                     | Not started |
 | 6    | Persistence + deep links out to booking sites                  | Not started |
 
-`trip-model.ts` is the only file that exists. It has no dependencies and no UI.
-Everything else is greenfield.
+The project is now scaffolded with Vite + React + TS + Tailwind; `trip-model.ts`
+lives at `src/model/trip.ts` per the structure below, and the map renderer lives
+under `src/map/`.
 
 ---
 
