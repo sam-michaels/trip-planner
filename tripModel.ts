@@ -28,7 +28,19 @@ export function coords(lng: number, lat: number): Coordinates {
   return [lng, lat];
 }
 
-export type CurrencyCode = "CAD" | "EUR" | "MAD" | "USD" | "GBP";
+/**
+ * ISO 4217 code, e.g. "CAD", "EUR", "MAD".
+ *
+ * WHY NOT A UNION OF LITERALS: a fixed union only covers the
+ * currencies you thought to list, and silently breaks the moment a
+ * destination uses anything else. Currency codes are looked up at
+ * the boundary instead — see `fetchCurrencyForCountry` in
+ * currencyApi.ts — and validated there against
+ * `Intl.supportedValuesOf("currency")`, which is every real ISO 4217
+ * code the runtime knows about. The type stays a plain `string`
+ * because TypeScript can't express "one of ~180 runtime-known values."
+ */
+export type CurrencyCode = string;
 
 /**
  * Money is never a bare number.
