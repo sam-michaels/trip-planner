@@ -2,16 +2,23 @@
 // mode/status -> paint. geometry.ts decides what shape a leg draws
 // as; this file decides how it's painted.
 //
-// THE CHANGE FROM SIX COLOURS TO ONE: legs used to be coloured by
-// mode. That put two independent facts — what kind of journey this
-// is, and how firm it is — into channels that fought each other, and
-// left every route competing with a colourful basemap. Now:
+// WHAT EACH CHANNEL CARRIES:
 //
-//   * MODE is carried by icons repeated along the line, the same
-//     icons the editor uses (see modeSprites.ts);
-//   * STATUS is carried by dashed-versus-solid and opacity;
-//   * SELECTION gets the only real colour on the map, so the leg
-//     you're looking at is unmistakable.
+//   * MODE is the line's colour, read off the feature (`LEG_COLOR`
+//     below, set from `MODE_COLORS` in geometry.ts), reinforced by
+//     that mode's icon repeated along the line — the same icon the
+//     editor and the leg card use (see modeSprites.ts);
+//   * STATUS is dashed-versus-solid, plus opacity;
+//   * SELECTION is a wide soft halo in the leg's own colour, so the
+//     route lights up rather than a different route appearing under
+//     it.
+//
+// Mode and status used to fight over colour — status was painted in
+// the mode's swatch — so they were split: status has its own palette
+// now (`STATUS_COLORS` in itinerary/labels.ts) and never borrows this
+// one. The basemap was also switched to MapTiler's `landscape` for
+// this to work, because a saturated navigation basemap leaves six
+// muted route colours nowhere to sit.
 //
 // A white casing under every line is what makes them read as drawn
 // *on* the map rather than lost in it — the same trick road atlases

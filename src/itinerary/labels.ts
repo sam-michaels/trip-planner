@@ -115,16 +115,6 @@ export const STATUS_PILL_CLASSES: Record<PlanStatus, string> = {
 };
 
 /**
- * The same three steps as a filled accent, for anything that needs to
- * read as a selected state rather than as a label.
- */
-export const STATUS_ACCENT_CLASSES: Record<PlanStatus, string> = {
-  idea: "border-dashed border-heather-300 bg-heather-50 text-heather-600",
-  planned: "border-dashed border-ochre-300 bg-ochre-50 text-ochre-700",
-  booked: "border-moss-500 bg-moss-500 text-parchment",
-};
-
-/**
  * Format money in the currency it was actually recorded in — no
  * conversion. Converting here would need a live FX rate and would
  * quietly turn a true record into an estimate; see the README's "money

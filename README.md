@@ -121,20 +121,41 @@ The editor follows the same language, so the list and the map read the same way.
 
 | Fact | Channel | Where |
 | --- | --- | --- |
-| What kind of journey | **Colour + icon** | `MODE_COLORS` / `MODE_ICONS` in `itinerary/labels.ts` |
-| How firm the plan is | **Solid vs dashed**, plus opacity | `STATUS_OPACITY` in `map/style.ts` |
-| Which leg you're looking at | **A halo** in that leg's own colour | the `-highlight` layer |
+| What kind of journey | **Mode colour + icon** | `MODE_COLORS` / `MODE_ICONS` in `itinerary/labels.ts` |
+| How firm the plan is | **Status colour**, and solid vs dashed | `STATUS_COLORS` / `STATUS_PILL_CLASSES` in `itinerary/labels.ts`; `STATUS_OPACITY` in `map/style.ts` |
+| Which leg you're looking at | **A halo** in that leg's own mode colour | the `-highlight` layer |
+
+Mode and status get **separate palettes and never share a swatch**. The status
+pill used to be painted in the mode's colour, which meant "Idea" was terracotta
+on the flight and pine on the train — so the pill that exists precisely to let
+you sweep the list and count what's still unbooked was a different colour on
+every row. Status is a property of the plan, not of the journey; it gets its own
+three colours and uses them everywhere.
 
 Colour and icon deliberately both encode mode. That's reinforcement, not
 redundancy: the icon is what you read on a card at arm's length, the colour is
 what picks one route out of four crossing the same corner at country zoom, where
 a 22px glyph is too small to identify.
 
-The palette is saturated and warm on purpose. An earlier pass drew everything in
-slate and near-black, which was legible and completely joyless — a trip that is
-mostly `idea` legs, i.e. every trip worth planning, looked like a failure state
-rather than one taking shape. Ideas are the most exciting thing in the list and
-should not be the greyest.
+The palette is **soft forest** — earthy, desaturated, pastel. Five named scales in
+`src/index.css` (`bark` for neutrals, plus `moss`, `ochre`, `rust`, `heather`)
+and `parchment` for anything that floats above the page. The rule is that chrome
+is pastel and content is not: surfaces, borders and pills live at 50-200 so they
+read as paper and shade, while anything carrying meaning — a mode, a status, a
+warning — sits at 400-600, dark enough to be told apart at a glance and to
+survive being drawn 3px wide over a basemap.
+
+An earlier pass drew everything in slate and near-black, which was legible and
+completely joyless — a trip that is mostly `idea` legs, i.e. every trip worth
+planning, looked like a failure state rather than one taking shape. Ideas are the
+most exciting thing in the list and should not be the greyest, which is why
+`idea` is heather rather than grey, and why the progression heather → ochre →
+moss runs cool to warm to settled.
+
+The map basemap is MapTiler's `landscape` rather than `streets-v2` for the same
+reason: the map is half the screen, so whatever palette it brings *is* the app's
+palette, and a saturated navigation style — blue water, bright parks, orange
+motorways — left the six muted route colours nowhere to sit.
 
 ### 5. Times are local wall-clock, with no timezone offset
 
