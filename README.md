@@ -41,13 +41,24 @@ actively misleading — see "Cost is one number" below.
 
 ## The one idea to understand first
 
-**A trip is an ordered list of legs.** A leg is one continuous movement from A to
-B by one mode. Stays and activities attach to the places between legs.
+**A trip is an ordered list of destinations.** A destination is a city you want to
+be in, for some number of nights. Everything else follows from that list: the
+**legs** — one continuous movement from A to B by one mode — are *derived*, by
+asking a route engine how to get between each consecutive pair and then applying
+whatever the user said about individual hops. Stays and activities attach to the
+places you stop at.
 
 The map, the cost rollup, and the day-by-day view are not three features — they
-are three renderings of that single array. Before adding anything, ask whether it
-can be expressed as a leg, a stay, an activity, or a function derived from them.
-If it can't, that's a signal the model needs discussion, not a workaround.
+are three renderings of that single list. Before adding anything, ask whether it
+can be expressed as a destination, a hop override, a stay, an activity, or a
+function derived from them. If it can't, that's a signal the model needs
+discussion, not a workaround.
+
+**Why destinations and not legs**, since this inverts the original design: nobody
+plans a trip by naming a bus. Planning starts at "Lisbon and Porto, maybe four
+nights each" — the transport, the dates and the intermediate airports are
+consequences, worked out later and often revised. A leg-first model makes you
+invent a departure time before you can record where you want to go.
 
 ---
 
@@ -97,14 +108,24 @@ breakdown is the **truth**; converting it is a **view**. See "Cost is one number
 
 ### 3. Derive, don't store
 
-There is no `totalCost` field and no `order` field, by design. Both are computed
-(`totalByCurrency()`, `orderedLegs()`). A stored derived value goes stale the
-moment something upstream is edited. Do not add cached totals or explicit
-ordering indices without a measured performance reason.
+There is no `totalCost` field and no stored `legs` array, by design. Both are
+computed (`totalByCurrency()`, `deriveLegs()`). A stored derived value goes stale
+the moment something upstream is edited. Do not add cached totals without a
+measured performance reason.
 
-Leg order comes from `departure` time, so inserting a leg mid-trip requires no
-reshuffling. Undated legs sort to the end rather than throwing — the app must stay
-usable while an itinerary is still half-sketched.
+**The one deliberate exception is destination order**, which is array position in
+`Trip.destinations` and nothing else. The model used to derive leg order from
+`departure` on exactly the reasoning above — but that assumed there was always
+something to sort by. Every date here is optional, because "Porto, no idea when"
+is the normal early state, so a derived order has nothing to derive from.
+Sequence is the first real decision a traveller makes, so it is first-class data.
+Reordering is a splice; it never rewrites a date you typed.
+
+Because legs are thrown away and rebuilt, anything the user says about one is
+stored in `Trip.hopOverrides`, keyed by `hopId(from, to)` — the place pair, never
+an index. Reorder the destinations and the override stays attached to the same
+physical journey; change a hop's endpoints and it is a different journey, which
+correctly starts fresh. See the HOP IDENTITY banner in `src/model/trip.ts`.
 
 ### 4. `status` drives the visual language
 
@@ -165,11 +186,11 @@ write a raw `toISOString()` into a leg.
 
 Three reasons, in order of how badly each bites:
 
-1. **`orderedLegs()` sorts with `localeCompare`**, i.e. lexicographically. That is
-   only correct while every timestamp shares one format. Mixing
-   `"2026-09-12T14:00"` with `"2026-09-12T14:00:00Z"` sorts by punctuation and
-   the itinerary silently comes out in the wrong order — the same silent-failure
-   shape as the `[lng, lat]` flip.
+1. **Timestamps get compared as strings**, with `localeCompare`. That is only
+   correct while every timestamp shares one format. Mixing `"2026-09-12T14:00"`
+   with `"2026-09-12T14:00:00Z"` compares by punctuation, and whatever depended
+   on the comparison is silently wrong — the same silent-failure shape as the
+   `[lng, lat]` flip.
 2. `<input type="datetime-local">` speaks exactly this string, so the form
    boundary needs no conversion, and conversion is where timezone bugs breed.
 3. It's what the ticket says. A boarding pass reading 14:05 means 14:05 where
@@ -245,9 +266,13 @@ them after a lucide upgrade.
 
 ### Reordering rewrites dates, visibly
 
-There is no `order` field, so a drop has to be expressed as a change to
-`departure`. `src/itinerary/reorder.ts` works out the smallest edit that makes
-`orderedLegs()` agree with where you dropped the card, under two rules:
+> **Being replaced.** This describes the leg editor as it stands while the model
+> inversion lands. Legs had no `order` field, so a drop had to be expressed as a
+> change to `departure`. Destinations carry explicit order, so once the panel is
+> rebuilt around them a drop is a splice and none of this is needed.
+
+`src/itinerary/reorder.ts` works out the smallest edit that makes `orderedLegs()`
+agree with where you dropped the card, under two rules:
 
 - **Only the dragged leg is ever edited.** A drop never reaches sideways and
   shifts a leg you didn't touch. If a position can't be reached by editing the
@@ -396,7 +421,7 @@ src/
     ItineraryPanel.tsx   # the list: ordering, drop targets, where the editor opens
     LegCard.tsx          # one leg, collapsed
     LegEditor.tsx        # the leg form
-    LegConnector.tsx     # the strip between two legs; also surfaces findGaps()
+    LegConnector.tsx     # the strip between two legs; also surfaces gaps
     PlacePicker.tsx      # trip places + IATA + Nominatim search
     tripReducer.ts       # every trip edit, plus the undo slot
     reorder.ts           # drop position -> smallest departure edit

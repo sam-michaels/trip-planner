@@ -16,13 +16,29 @@ import { CostSummary } from "./cost/CostSummary";
 import { ItineraryPanel } from "./itinerary/ItineraryPanel";
 import { tripReducer } from "./itinerary/tripReducer";
 import { TripMap } from "./map/TripMap";
-import { sampleTrip } from "./model/trip";
+import { defaultMode } from "./itinerary/plausibleModes";
+import type { RouteMap, Trip } from "./model/trip";
+import { deriveLegs, sampleTrip } from "./model/trip";
+
+// TODO(wave-2): an empty `RouteMap` because Unit 6's route engine
+// doesn't exist yet. `deriveLegs` degrades to one placeholder hop per
+// destination pair — moded by geography, so the Atlantic crossing
+// still comes out as a flight — which is enough to seed the leg editor
+// and the map until the engine can propose real routes.
+const NO_ROUTES: RouteMap = new Map();
+
+const initialState = (trip: Trip) => ({
+  trip,
+  legs: deriveLegs(trip, NO_ROUTES, defaultMode),
+});
 
 function App() {
-  const [state, dispatch] = useReducer(tripReducer, { trip: sampleTrip });
+  // Lazy init: the initial state is only wanted on mount, and building
+  // it eagerly would re-derive every leg on every render for nothing.
+  const [state, dispatch] = useReducer(tripReducer, sampleTrip, initialState);
   const [selectedLegId, setSelectedLegId] = useState<string>();
 
-  const { trip } = state;
+  const { trip, legs } = state;
 
   return (
     <div className="flex h-screen flex-col bg-bark-100 text-bark-800">
@@ -37,7 +53,7 @@ function App() {
 
         <div className="flex-1" />
 
-        <CostSummary trip={trip} />
+        <CostSummary trip={trip} legs={legs} />
       </header>
 
       {/*
@@ -58,7 +74,7 @@ function App() {
 
         <main className="h-[45vh] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1">
           <TripMap
-            trip={trip}
+            legs={legs}
             selectedLegId={selectedLegId}
             onSelectLeg={setSelectedLegId}
           />

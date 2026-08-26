@@ -1,10 +1,19 @@
 // ============================================================
 // Dragging a leg to a new position.
 //
-// THE TENSION THIS FILE RESOLVES: the model has no `order` field on
-// purpose — order is derived from `departure` (see README, "derive,
-// don't store"). But while a trip is still being sketched almost
-// nothing has a date, and being unable to rearrange it is miserable.
+// TODO(wave-2): this whole file is on borrowed time. It exists because
+// legs used to BE the trip and had no `order` field, so a drop had to
+// be expressed as an edit to `departure`. Destinations are the spine
+// now and they carry explicit order, so reordering is a splice and
+// none of the date-rewriting below is needed. It survives here,
+// operating on a plain `Leg[]` the shell keeps in reducer state, only
+// so the existing leg editor keeps compiling until the panel is
+// rebuilt around destinations.
+//
+// THE TENSION THIS FILE RESOLVED: legs had no `order` field — order
+// was derived from `departure` ("derive, don't store"). But while a
+// trip is still being sketched almost nothing has a date, and being
+// unable to rearrange it is miserable.
 //
 // So a drop is interpreted as a statement about order, and this file
 // works out the smallest edit that makes `orderedLegs()` agree with
@@ -22,13 +31,12 @@
 // simply array order, and dragging rewrites no dates at all.
 // ============================================================
 
-import type { Leg, Trip } from "../model/trip";
-import { orderedLegs } from "../model/trip";
+import type { Leg } from "../model/trip";
 import { formatDateTime, midpoint, shiftHours, toMillis } from "./datetime";
 import { legLabel } from "./labels";
 
 export interface MoveResult {
-  trip: Trip;
+  legs: Leg[];
   /**
    * Present only when the move rewrote the dragged leg's times.
    * `undefined` means the move was pure reordering — nothing to undo,
@@ -51,13 +59,13 @@ const NUDGE_HOURS = 2;
  * `toIndex` is an index into the *final* list, i.e. where the card
  * ends up, which is what a drop target naturally describes.
  */
-export function moveLeg(trip: Trip, legId: string, toIndex: number): MoveResult {
-  const ordered = orderedLegs(trip);
+export function moveLeg(legs: Leg[], legId: string, toIndex: number): MoveResult {
+  const ordered = orderedLegs(legs);
   const fromIndex = ordered.findIndex((leg) => leg.id === legId);
-  if (fromIndex === -1) return { trip };
+  if (fromIndex === -1) return { legs };
 
   const target = Math.max(0, Math.min(toIndex, ordered.length - 1));
-  if (target === fromIndex) return { trip };
+  if (target === fromIndex) return { legs };
 
   const dragged = ordered[fromIndex];
   const desired = ordered.filter((leg) => leg.id !== legId);
@@ -69,11 +77,31 @@ export function moveLeg(trip: Trip, legId: string, toIndex: number): MoveResult 
   // with equal (or absent) departures fall back to array order, since
   // Array.sort is stable. Persisting the order the user dropped into
   // is what makes ties resolve their way instead of arbitrarily.
-  const legs = desired.map((leg) =>
+  const moved = desired.map((leg) =>
     leg.id === legId && rewritten ? rewritten.leg : leg,
   );
 
-  return { trip: { ...trip, legs }, note: rewritten?.note };
+  return { legs: moved, note: rewritten?.note };
+}
+
+/**
+ * TODO(wave-2): delete with the rest of this file.
+ *
+ * The model used to export this. It doesn't any more — order comes
+ * from `Trip.destinations`' array position now, not from dates — but
+ * the drag logic below is written entirely in terms of the ordering it
+ * produces, so it lives here until that logic goes.
+ *
+ * Undated legs sort to the end rather than throwing: while a trip is
+ * still being sketched, most legs have no date.
+ */
+export function orderedLegs(legs: Leg[]): Leg[] {
+  return [...legs].sort((a, b) => {
+    if (!a.departure && !b.departure) return 0;
+    if (!a.departure) return 1;
+    if (!b.departure) return -1;
+    return a.departure.localeCompare(b.departure);
+  });
 }
 
 interface Rewrite {

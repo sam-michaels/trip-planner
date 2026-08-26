@@ -43,10 +43,21 @@ import { MODE_COLORS } from "./labels";
 
 type Tone = "quiet" | "invite" | "alert";
 
+/**
+ * All this strip needs to know about a hole in the itinerary.
+ *
+ * A subset of `ItineraryGap` rather than the whole thing: the
+ * connector draws the space between two legs and has no use for which
+ * destination pair or hop id produced the gap. Taking the narrow type
+ * means the panel can hand it a gap from either source while the model
+ * inversion is half-landed.
+ */
+export type ConnectorGap = Pick<ItineraryGap, "from" | "to" | "severity">;
+
 interface LegConnectorProps {
   arriving: Leg;
   departing: Leg;
-  gap?: ItineraryGap;
+  gap?: ConnectorGap;
   onAddLeg: (options: {
     from: Place;
     to: Place;
@@ -178,7 +189,7 @@ interface Described {
 }
 
 function describe(
-  gap: ItineraryGap | undefined,
+  gap: ConnectorGap | undefined,
   stop: DescribedStop | undefined,
   arriving: Leg,
   departing: Leg,

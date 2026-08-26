@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { formatMoney } from "../itinerary/labels";
 import { toBase } from "../lib/currency";
-import type { CurrencyCode, Trip } from "../model/trip";
+import type { CurrencyCode, Leg, Trip } from "../model/trip";
 import { totalByCurrency } from "../model/trip";
 import { useRates } from "./useRates";
 
@@ -34,7 +34,13 @@ interface CostLine {
   converted?: number;
 }
 
-export function CostSummary({ trip }: { trip: Trip }) {
+interface CostSummaryProps {
+  trip: Trip;
+  /** Derived legs, supplied by the shell — see `deriveLegs()`. */
+  legs: Leg[];
+}
+
+export function CostSummary({ trip, legs }: CostSummaryProps) {
   const { table, loading, error } = useRates(trip.homeCurrency);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -51,7 +57,7 @@ export function CostSummary({ trip }: { trip: Trip }) {
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
 
-  const lines: CostLine[] = Object.entries(totalByCurrency(trip)).map(
+  const lines: CostLine[] = Object.entries(totalByCurrency(trip, legs)).map(
     ([currency, amount]) => ({
       currency,
       amount: amount ?? 0,
