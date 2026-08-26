@@ -11,9 +11,10 @@
 // person" on the web. So this module never throws: every failure
 // mode resolves to a tagged outcome instead, and the caller (the
 // origin-editing UI) decides what each one means for the user —
-// "denied" wants a manual-entry prompt, "timeout" might warrant a
-// retry button, "no-match" means we found *somewhere* but Nominatim
-// couldn't name a city there (open ocean, sparse rural address).
+// "denied" wants a manual-entry prompt, "timeout" and "no-fix" might
+// warrant a retry button, "no-match" means we found *somewhere* but
+// Nominatim couldn't name a city there (open ocean, sparse rural
+// address).
 //
 // WHY A TAGGED RESULT INSTEAD OF `Place | undefined`: undefined alone
 // can't distinguish "user said no" from "the network hiccuped," and
@@ -31,18 +32,35 @@ import { toPlace, type NominatimResult } from "./placesApi";
  */
 const POSITION_TIMEOUT_MS = 8_000;
 
+/**
+ * Give up on the reverse-geocode network call after this long. A fetch
+ * with no `AbortSignal` can hang forever if the host stalls without
+ * ever erroring — the whole point of bounding the geolocation step
+ * above is defeated if this step is left to hang instead.
+ */
+const GEOCODE_TIMEOUT_MS = 8_000;
+
+/**
+ * Every kind below is final EXCEPT where noted "retryable" — that's
+ * the signal Unit 8's UI needs to decide between offering a "try
+ * again" button and going straight to manual entry. Documented here,
+ * precisely, because that UI consumes this contract without being
+ * able to ask.
+ */
 export type HomeLocationResult =
   /** Got a fix and Nominatim could name a city there. */
   | { kind: "found"; place: Place }
-  /** The user said no to the permission prompt. Ask them to type a city instead. */
+  /** The user said no to the permission prompt. NOT retryable without a browser settings change — ask them to type a city instead. */
   | { kind: "denied" }
-  /** No usable geolocation at all: insecure context, no API, or the browser/OS has it switched off. */
+  /** No usable geolocation at all: insecure context, no API, or the browser/OS has it switched off entirely. NOT retryable — go straight to manual entry. */
   | { kind: "unavailable" }
-  /** Took longer than `POSITION_TIMEOUT_MS` to get a fix. Worth letting the user retry. */
+  /** The device couldn't get a position fix this time (weak GPS/Wi-Fi signal, e.g. indoors). RETRYABLE — trying again, or moving near a window, often works. */
+  | { kind: "no-fix" }
+  /** The position request or the reverse-geocode call took too long. RETRYABLE. */
   | { kind: "timeout" }
-  /** Got coordinates, but reverse geocoding found no city/country there (open ocean, sparse rural area). */
+  /** Got coordinates, but reverse geocoding found no city/country there (open ocean, sparse rural area). NOT retryable with the same coordinates. */
   | { kind: "no-match" }
-  /** Something else went wrong (network down, Nominatim unreachable/non-200, etc). */
+  /** Something else went wrong (network down, Nominatim unreachable/non-200, etc). RETRYABLE at the caller's discretion. */
   | { kind: "error"; message: string };
 
 /** Promise wrapper around the callback-based `getCurrentPosition`. */
@@ -50,6 +68,20 @@ function getCurrentPosition(options: PositionOptions): Promise<GeolocationPositi
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject, options);
   });
+}
+
+/**
+ * Best-effort human-readable message from an unknown thrown value.
+ * `GeolocationPositionError` carries a `.message` but, unlike a
+ * `fetch` rejection, isn't a subclass of `Error` — so `err.message`
+ * alone would silently miss it.
+ */
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err && typeof err.message === "string") {
+    return err.message;
+  }
+  return "Unknown error";
 }
 
 /**
@@ -62,8 +94,16 @@ function getCurrentPosition(options: PositionOptions): Promise<GeolocationPositi
  * Returns `undefined` rather than throwing when the address at these
  * coordinates has no city/country, for the same reason `toPlace`
  * does: a result you can't use is not an error, just an empty one.
+ *
+ * Takes an optional `AbortSignal`, the same shape `searchPlaces` uses,
+ * so callers can bound or cancel the request rather than risk a hang
+ * on a stalled connection (see `detectHomeLocation`, which applies its
+ * own deadline via `AbortSignal.timeout`).
  */
-export async function reverseGeocodePlace(location: Coordinates): Promise<Place | undefined> {
+export async function reverseGeocodePlace(
+  location: Coordinates,
+  signal?: AbortSignal,
+): Promise<Place | undefined> {
   const [lng, lat] = location;
 
   const url = new URL("https://nominatim.openstreetmap.org/reverse");
@@ -72,7 +112,7 @@ export async function reverseGeocodePlace(location: Coordinates): Promise<Place 
   url.searchParams.set("lon", String(lng));
   url.searchParams.set("addressdetails", "1");
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new Error(`Reverse geocode failed for ${lat},${lng} (${res.status})`);
   }
@@ -102,12 +142,16 @@ export async function detectHomeLocation(): Promise<HomeLocationResult> {
       maximumAge: 0,
     });
   } catch (err) {
-    // GeolocationPositionError codes: 1 = PERMISSION_DENIED,
-    // 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT.
+    // GeolocationPositionError codes: 1 = PERMISSION_DENIED (not
+    // retryable), 2 = POSITION_UNAVAILABLE — a failed fix, typically
+    // transient (retryable), 3 = TIMEOUT (retryable). Anything else
+    // is unexpected rather than one of the three documented cases, so
+    // it's reported as an error instead of guessed at.
     const code = (err as GeolocationPositionError | undefined)?.code;
     if (code === 1) return { kind: "denied" };
+    if (code === 2) return { kind: "no-fix" };
     if (code === 3) return { kind: "timeout" };
-    return { kind: "unavailable" };
+    return { kind: "error", message: describeError(err) };
   }
 
   // Geolocation hands back {latitude, longitude} — the opposite order
@@ -116,9 +160,17 @@ export async function detectHomeLocation(): Promise<HomeLocationResult> {
   const location = coords(position.coords.longitude, position.coords.latitude);
 
   try {
-    const place = await reverseGeocodePlace(location);
+    const place = await reverseGeocodePlace(location, AbortSignal.timeout(GEOCODE_TIMEOUT_MS));
     return place ? { kind: "found", place } : { kind: "no-match" };
   } catch (err) {
-    return { kind: "error", message: err instanceof Error ? err.message : String(err) };
+    // AbortSignal.timeout() aborts with a DOMException named
+    // "TimeoutError" (some runtimes surface "AbortError" instead) —
+    // either way that's the geocode call taking too long, not a
+    // hard failure, so it maps to the same retryable "timeout" as a
+    // slow position fix rather than the catch-all "error".
+    if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      return { kind: "timeout" };
+    }
+    return { kind: "error", message: describeError(err) };
   }
 }
