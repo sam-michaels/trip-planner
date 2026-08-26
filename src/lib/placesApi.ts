@@ -25,7 +25,7 @@ import { coords } from "../model/trip";
  * these requests through a backend that sets a real User-Agent —
  * Nominatim will start blocking otherwise.
  */
-interface NominatimResult {
+export interface NominatimResult {
   place_id: number;
   lat: string;
   lon: string;
@@ -50,7 +50,7 @@ interface NominatimResult {
  * select is worse than no result at all, so unconvertible hits are
  * dropped from the list rather than surfaced as errors.
  */
-function toPlace(result: NominatimResult, fallbackName: string): Place | undefined {
+export function toPlace(result: NominatimResult, fallbackName: string): Place | undefined {
   const address = result.address ?? {};
   const city =
     address.city ?? address.town ?? address.village ?? address.municipality;
