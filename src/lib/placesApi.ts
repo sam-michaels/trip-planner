@@ -41,45 +41,83 @@ interface NominatimResult {
 }
 
 /**
- * Resolve a free-text query ("Seville", "Porto Campanhã station") to
- * a `Place`. Throws if nothing matches.
+ * Convert one Nominatim hit to a `Place`, or `undefined` if it lacks
+ * the city/country the model requires.
+ *
+ * WHY UNDEFINED RATHER THAN A THROW: a search for "Porto" returns a
+ * mix of stations, neighbourhoods and administrative regions, and some
+ * of those genuinely have no city. In a picker, a result you can't
+ * select is worse than no result at all, so unconvertible hits are
+ * dropped from the list rather than surfaced as errors.
  */
-export async function fetchPlace(query: string): Promise<Place> {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("limit", "1");
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Place lookup failed for "${query}" (${res.status})`);
-  }
-
-  const results: NominatimResult[] = await res.json();
-  const result = results[0];
-  if (!result) {
-    throw new Error(`No place found for "${query}"`);
-  }
-
+function toPlace(result: NominatimResult, fallbackName: string): Place | undefined {
   const address = result.address ?? {};
   const city =
     address.city ?? address.town ?? address.village ?? address.municipality;
   const countryCode = address.country_code;
 
-  if (!city || !countryCode) {
-    throw new Error(
-      `"${query}" resolved to a location without a city/country — try a more specific query`,
-    );
-  }
+  if (!city || !countryCode) return undefined;
 
   return {
     id: `osm-${result.place_id}`,
-    name: result.name || query,
+    name: result.name || fallbackName,
     city,
     country: countryCode.toUpperCase(),
     coords: coords(parseFloat(result.lon), parseFloat(result.lat)),
   };
+}
+
+/**
+ * Search for places matching a free-text query, best match first.
+ *
+ * WHY THIS EXISTS ALONGSIDE `fetchPlace`: an autocomplete needs to
+ * show the user a choice. "Porto" could be the city, Campanhã station,
+ * or São Bento station, and only the person planning the trip knows
+ * which one they meant — guessing silently puts a leg endpoint in the
+ * wrong place, which is exactly the kind of error that's invisible
+ * until you look at the map.
+ *
+ * Callers are responsible for rate limiting: Nominatim's usage policy
+ * allows roughly one request per second, so debounce keystrokes rather
+ * than firing per character (see `PlacePicker`).
+ */
+export async function searchPlaces(
+  query: string,
+  limit = 6,
+  signal?: AbortSignal,
+): Promise<Place[]> {
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("limit", String(limit));
+
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    throw new Error(`Place lookup failed for "${query}" (${res.status})`);
+  }
+
+  const results: NominatimResult[] = await res.json();
+  return results
+    .map((r) => toPlace(r, query))
+    .filter((p): p is Place => p !== undefined);
+}
+
+/**
+ * Resolve a free-text query ("Seville", "Porto Campanhã station") to
+ * a single `Place` — the best match that has a usable city/country.
+ * Throws if nothing usable matches.
+ *
+ * Asks for several results rather than one because Nominatim's top hit
+ * is sometimes an administrative region with no city attached; taking
+ * the first *convertible* result is more useful than failing on it.
+ */
+export async function fetchPlace(query: string): Promise<Place> {
+  const [best] = await searchPlaces(query, 5);
+  if (!best) {
+    throw new Error(`No place found for "${query}"`);
+  }
+  return best;
 }
 
 // ---------- Airports (OurAirports, by IATA code) ----------

@@ -1,1 +1,92 @@
 @import "tailwindcss";
+
+/* ============================================================
+   The palette: soft forest.
+ 
+   Everything is drawn from things that are actually that colour
+   outdoors — bark, moss, lichen, ochre clay, heather, rusted iron —
+   and then desaturated until none of them shout. The rule the whole
+   scheme follows is that the CHROME is pastel and the CONTENT is
+   not: backgrounds, borders and pills sit in the 50-200 range so
+   they read as paper and shade, while the few things that carry
+   meaning (a mode, a status, a warning) sit at 400-600 where they
+   still have enough depth to be told apart at a glance and to survive
+   being drawn 3px wide on top of a map.
+ 
+   Named rather than numbered (bark, not "neutral") because the names
+   are what keep the scheme coherent as it grows: it's obvious that a
+   new surface should be bark and a new confirmation should be moss,
+   in a way that "gray" and "green-2" never make obvious.
+   ============================================================ */
+
+@theme {
+  /* Bark — the sage-grey neutral everything sits on. Replaces
+     Tailwind's `stone`: same lightness ramp, rotated off warm-grey
+     toward green, so it can still carry text at 700-900 and borders
+     at 200-300 while reading as shade under trees rather than as
+     paper. The green is subtle on purpose — enough that the app has
+     a temperature, not so much that a plain surface looks tinted. */
+  --color-bark-50: #f6f7f2;
+  --color-bark-100: #eaeee2;
+  --color-bark-200: #d7dcc9;
+  --color-bark-300: #bcc3aa;
+  --color-bark-400: #9aa189;
+  --color-bark-500: #7c836c;
+  --color-bark-600: #616855;
+  --color-bark-700: #4c5243;
+  --color-bark-800: #363b30;
+  --color-bark-900: #262a22;
+
+  /* Parchment — the surface colour for anything that should float
+     above the page: cards, the header, popovers. Deliberately not
+     #fff; a pure white card on a warm ground reads as a hole. */
+  --color-parchment: #fcfdf8;
+
+  /* Moss — the primary accent. Focus rings, the undo bar, "booked". */
+  --color-moss-50: #f0f5ee;
+  --color-moss-100: #dfeadb;
+  --color-moss-200: #c2d8bb;
+  --color-moss-300: #9dbf94;
+  --color-moss-400: #7aa36f;
+  --color-moss-500: #5c8752;
+  --color-moss-600: #486b40;
+  --color-moss-700: #3a5534;
+  --color-moss-800: #2e422a;
+
+  /* Ochre — dry grass. The "here's something to do about it" tone:
+     invitations, in-progress plans, soft warnings. */
+  --color-ochre-50: #faf5e8;
+  --color-ochre-100: #f4ead0;
+  --color-ochre-200: #e8d6a6;
+  --color-ochre-300: #d9bd76;
+  --color-ochre-400: #c9a34f;
+  --color-ochre-500: #b0873a;
+  --color-ochre-600: #8e6b2d;
+  --color-ochre-700: #6f5324;
+  --color-ochre-800: #55401d;
+
+  /* Rust — oxidised iron. The only alarm colour. Muted like the rest,
+     but it's the warmest thing on screen, which is what makes a hard
+     gap findable in a list of pastels. */
+  --color-rust-50: #fbf1ee;
+  --color-rust-100: #f5e0da;
+  --color-rust-200: #e9c2b8;
+  --color-rust-300: #d79b8c;
+  --color-rust-400: #c07361;
+  --color-rust-500: #a85644;
+  --color-rust-600: #8a4335;
+  --color-rust-700: #6d352a;
+  --color-rust-800: #532921;
+
+  /* Heather — the one cool colour, for "idea". See STATUS_COLORS in
+     itinerary/labels.ts for why an idea isn't grey. */
+  --color-heather-50: #f4f2f7;
+  --color-heather-100: #e8e4ee;
+  --color-heather-200: #d3ccdd;
+  --color-heather-300: #b6aac7;
+  --color-heather-400: #9887ae;
+  --color-heather-500: #7d6a94;
+  --color-heather-600: #645378;
+  --color-heather-700: #4f425f;
+  --color-heather-800: #3c3248;
+}

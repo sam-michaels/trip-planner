@@ -1,80 +1,96 @@
 // ============================================================
-// Currency lookup — resolves an ISO 3166-1 country code to the
-// currency it uses, via the REST Countries API.
+// Country -> the currency you'll pay in there.
 //
-// WHY A NETWORK CALL AND NOT A BUNDLED TABLE: this app is used for
-// PLANNING (good wifi assumed), not as an offline travel companion,
-// so there's no reason to ship and maintain a static country→currency
-// table that goes stale whenever a country redenominates. A live
-// lookup is always current and needs zero upkeep.
+// THIS USED TO BE A NETWORK CALL, and the reasoning was sound at the
+// time: a live lookup can't go stale, and this app assumes good wifi
+// because it's for planning, not for carrying around. That reasoning
+// died on contact with the provider.
+//
+// REST Countries v3.1 was deprecated in 2026, and every remaining
+// endpoint — v3.1 and v5 alike — now 301s to a static file host that
+// sends no `Access-Control-Allow-Origin` header. That makes it
+// unusable from a browser at any URL: the redirect itself fails CORS
+// before the response is ever read. There is no drop-in replacement
+// that is free, keyless, and CORS-enabled.
+//
+// So the table is vendored. The staleness risk that argued against it
+// is real but small and slow — a country changing currency is a
+// once-every-few-years event that makes the news, and the cost of
+// being wrong here is a pre-filled dropdown showing the wrong default,
+// which is one click to correct.
+//
+// NOT EXHAUSTIVE, and deliberately honest about it: unknown countries
+// return `undefined` and the caller falls back to the home currency,
+// which is exactly what happened when the network call failed anyway.
+//
+// Live FX *rates* are a different question and still come over the
+// network — see `lib/currency.ts`.
 // ============================================================
 
 import type { CurrencyCode } from "../model/trip";
 
-/** In-memory only — a planning session looks up the same country
- * (e.g. every leg/stay in Portugal) repeatedly. */
-const cache = new Map<string, CurrencyCode>();
-
 /**
- * Some countries legally use more than one currency (e.g. Cuba: CUP
- * and, historically, CUC). We return the first the API lists — good
- * enough for a default that the user can override — plus every code
- * found, so callers that care can offer a choice.
- */
-export interface CurrencyLookup {
-  primary: CurrencyCode;
-  all: CurrencyCode[];
-}
-
-/**
- * Look up the currency (or currencies) a country uses.
+ * ISO 3166-1 alpha-2 -> ISO 4217, as "CC:CUR" pairs.
  *
- * @param countryCode ISO 3166-1 alpha-2, e.g. "PT", "MA", "CA" — the
- * same code stored on `Place.country`.
- * @throws if the country code is unrecognized or the request fails.
+ * Flat pairs rather than currency-keyed groups because the lookup
+ * direction is country -> currency, and a reader checking one country
+ * shouldn't have to scan for it inside a block of thirty others.
  */
-export async function fetchCurrencyForCountry(
-  countryCode: string,
-): Promise<CurrencyLookup> {
-  const cached = cache.get(countryCode);
-  if (cached) return { primary: cached, all: [cached] };
+const COUNTRY_CURRENCY_PAIRS = `
+AD:EUR AE:AED AF:AFN AG:XCD AI:XCD AL:ALL AM:AMD AO:AOA AR:ARS AS:USD
+AT:EUR AU:AUD AW:AWG AX:EUR AZ:AZN BA:BAM BB:BBD BD:BDT BE:EUR BF:XOF
+BG:BGN BH:BHD BI:BIF BJ:XOF BL:EUR BM:BMD BN:BND BO:BOB BQ:USD BR:BRL
+BS:BSD BT:BTN BW:BWP BY:BYN BZ:BZD CA:CAD CD:CDF CF:XAF CG:XAF CH:CHF
+CI:XOF CK:NZD CL:CLP CM:XAF CN:CNY CO:COP CR:CRC CU:CUP CV:CVE CW:ANG
+CY:EUR CZ:CZK DE:EUR DJ:DJF DK:DKK DM:XCD DO:DOP DZ:DZD EC:USD EE:EUR
+EG:EGP EH:MAD ER:ERN ES:EUR ET:ETB FI:EUR FJ:FJD FK:FKP FM:USD FO:DKK
+FR:EUR GA:XAF GB:GBP GD:XCD GE:GEL GF:EUR GG:GBP GH:GHS GI:GIP GL:DKK
+GM:GMD GN:GNF GP:EUR GQ:XAF GR:EUR GT:GTQ GU:USD GW:XOF GY:GYD HK:HKD
+HN:HNL HR:EUR HT:HTG HU:HUF ID:IDR IE:EUR IL:ILS IM:GBP IN:INR IQ:IQD
+IR:IRR IS:ISK IT:EUR JE:GBP JM:JMD JO:JOD JP:JPY KE:KES KG:KGS KH:KHR
+KI:AUD KM:KMF KN:XCD KP:KPW KR:KRW KW:KWD KY:KYD KZ:KZT LA:LAK LB:LBP
+LC:XCD LI:CHF LK:LKR LR:LRD LS:LSL LT:EUR LU:EUR LV:EUR LY:LYD MA:MAD
+MC:EUR MD:MDL ME:EUR MF:EUR MG:MGA MH:USD MK:MKD ML:XOF MM:MMK MN:MNT
+MO:MOP MP:USD MQ:EUR MR:MRU MS:XCD MT:EUR MU:MUR MV:MVR MW:MWK MX:MXN
+MY:MYR MZ:MZN NA:NAD NC:XPF NE:XOF NF:AUD NG:NGN NI:NIO NL:EUR NO:NOK
+NP:NPR NR:AUD NU:NZD NZ:NZD OM:OMR PA:PAB PE:PEN PF:XPF PG:PGK PH:PHP
+PK:PKR PL:PLN PM:EUR PN:NZD PR:USD PS:ILS PT:EUR PW:USD PY:PYG QA:QAR
+RE:EUR RO:RON RS:RSD RU:RUB RW:RWF SA:SAR SB:SBD SC:SCR SD:SDG SE:SEK
+SG:SGD SI:EUR SJ:NOK SK:EUR SL:SLE SM:EUR SN:XOF SO:SOS SR:SRD SS:SSP
+ST:STN SV:USD SX:ANG SY:SYP SZ:SZL TC:USD TD:XAF TG:XOF TH:THB TJ:TJS
+TK:NZD TL:USD TM:TMT TN:TND TO:TOP TR:TRY TT:TTD TV:AUD TW:TWD TZ:TZS
+UA:UAH UG:UGX US:USD UY:UYU UZ:UZS VA:EUR VC:XCD VE:VES VG:USD VI:USD
+VN:VND VU:VUV WF:XPF WS:WST YE:YER YT:EUR ZA:ZAR ZM:ZMW ZW:ZWG
+`;
 
-  const res = await fetch(
-    `https://restcountries.com/v3.1/alpha/${encodeURIComponent(countryCode)}?fields=currencies`,
-  );
-
-  if (!res.ok) {
-    throw new Error(
-      `No currency data for country "${countryCode}" (${res.status})`,
-    );
-  }
-
-  const body: { currencies?: Record<string, unknown> } = await res.json();
-  const codes = Object.keys(body.currencies ?? {});
-
-  if (codes.length === 0) {
-    throw new Error(`Country "${countryCode}" has no listed currency`);
-  }
-
-  const validCodes = validateCurrencyCodes(codes);
-  cache.set(countryCode, validCodes[0]);
-  return { primary: validCodes[0], all: validCodes };
-}
+const CURRENCY_BY_COUNTRY = new Map<string, CurrencyCode>(
+  COUNTRY_CURRENCY_PAIRS.trim()
+    .split(/\s+/)
+    .map((pair) => pair.split(":") as [string, CurrencyCode]),
+);
 
 /**
- * Drop anything the runtime doesn't recognize as real ISO 4217 rather
- * than trusting the API response blindly — this is the actual
- * validation step `CurrencyCode` gave up doing at the type level.
+ * Every ISO 4217 code the runtime recognises.
+ *
+ * This is the validation `CurrencyCode` gave up doing at the type
+ * level — the type is a plain `string` because TypeScript can't
+ * express "one of ~180 runtime-known values". Checking the vendored
+ * table against it means a typo in the data above surfaces as a
+ * missing default rather than as an `Intl` crash inside a formatter
+ * three components away.
  */
-function validateCurrencyCodes(codes: string[]): CurrencyCode[] {
-  const known = new Set(Intl.supportedValuesOf("currency"));
-  const valid = codes.filter((c) => known.has(c));
+const KNOWN_CURRENCIES = new Set(Intl.supportedValuesOf("currency"));
 
-  if (valid.length === 0) {
-    throw new Error(
-      `None of the currency codes [${codes.join(", ")}] are recognized ISO 4217 codes`,
-    );
-  }
-
-  return valid;
+/**
+ * The currency a country uses, or `undefined` if it isn't in the
+ * table (or the table has a typo).
+ *
+ * Synchronous now that there's no network involved — callers that
+ * used to await this can just read it.
+ */
+export function currencyForCountry(
+  countryCode: string,
+): CurrencyCode | undefined {
+  const code = CURRENCY_BY_COUNTRY.get(countryCode.toUpperCase());
+  return code && KNOWN_CURRENCIES.has(code) ? code : undefined;
 }
