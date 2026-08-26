@@ -8,10 +8,18 @@
 // looked up against OurAirports instead — a static, purpose-built
 // dataset keyed by IATA code, which is exactly the identifier
 // `Leg`/`Place` already use.
+//
+// OurAirports also answers a question the geocoder can't: given a
+// city, which airport would you actually fly out of? `nearestAirports`
+// sorts by distance and filters by the dataset's size classification,
+// because "large_airport" is the best free stand-in for "has
+// scheduled service" — nothing free lists actual routes. `hubs.ts`
+// hand-corrects that heuristic where being wrong would hurt.
 // ============================================================
 
-import type { Place } from "../model/trip";
+import type { Coordinates, Place } from "../model/trip";
 import { coords } from "../model/trip";
+import { distanceKm } from "./geo";
 
 // ---------- General places (Nominatim) ----------
 
@@ -122,10 +130,55 @@ export async function fetchPlace(query: string): Promise<Place> {
 
 // ---------- Airports (OurAirports, by IATA code) ----------
 
+/**
+ * OurAirports' `type` column, verbatim.
+ *
+ * WHY IT EARNS A TYPE: it is the only signal in any free dataset that
+ * distinguishes an airport with scheduled service from a grass strip
+ * or a hospital helipad. No open API will tell you whether flights
+ * exist between two cities, so `large_airport` is the proxy the route
+ * engine plans against. It is a proxy, not a fact — see `hubs.ts` for
+ * the curated correction on the routes that matter most.
+ */
+export type AirportType =
+  | "large_airport"
+  | "medium_airport"
+  | "small_airport"
+  | "seaplane_base"
+  | "heliport"
+  | "balloonport"
+  | "closed";
+
+/**
+ * The three types worth ranking against each other.
+ *
+ * Heliports, seaplane bases, balloonports and closed fields are
+ * deliberately absent: they score nothing and are never returned by
+ * `nearestAirports`. Splitting the type this way also means
+ * `{ minType: "heliport" }` doesn't typecheck — a floor that isn't a
+ * size has no sensible interpretation, and defaulting it to "anything"
+ * would silently widen the search instead of narrowing it.
+ */
+export type AirportSize = Extract<
+  AirportType,
+  "small_airport" | "medium_airport" | "large_airport"
+>;
+
+const SIZE_RANK: Record<AirportSize, number> = {
+  small_airport: 1,
+  medium_airport: 2,
+  large_airport: 3,
+};
+
+function sizeRank(type: AirportType): number {
+  return SIZE_RANK[type as AirportSize] ?? 0;
+}
+
 interface AirportRow {
   name: string;
   municipality: string;
   isoCountry: string;
+  type: AirportType;
   lat: number;
   lon: number;
 }
@@ -145,9 +198,28 @@ function loadAirports(): Promise<Map<string, AirportRow>> {
         }
         return res.text();
       })
-      .then(parseAirportsCsv);
+      .then(parseAirportsCsv)
+      // Caching a *rejected* promise would turn one dropped connection
+      // into a session where no airport ever resolves again. Drop it so
+      // the next lookup retries.
+      .catch((err) => {
+        airportsByIata = undefined;
+        throw err;
+      });
   }
   return airportsByIata;
+}
+
+/** One parsed CSV row as the `Place` the rest of the app speaks. */
+function toAirportPlace(code: string, row: AirportRow): Place {
+  return {
+    id: `apt-${code.toLowerCase()}`,
+    name: row.name,
+    city: row.municipality,
+    country: row.isoCountry,
+    coords: coords(row.lon, row.lat),
+    iata: code,
+  };
 }
 
 /** Resolve an IATA code ("YYZ", "LIS") to a `Place`. Throws if unknown. */
@@ -160,14 +232,45 @@ export async function fetchAirport(iata: string): Promise<Place> {
     throw new Error(`No airport found for IATA code "${code}"`);
   }
 
-  return {
-    id: `apt-${code.toLowerCase()}`,
-    name: row.name,
-    city: row.municipality,
-    country: row.isoCountry,
-    coords: coords(row.lon, row.lat),
-    iata: code,
-  };
+  return toAirportPlace(code, row);
+}
+
+/**
+ * Airports near a point, nearest first.
+ *
+ * WHY `minType` DEFAULTS TO `large_airport`: the question a route
+ * engine is really asking is "where would I fly out of from here?",
+ * and the literally-nearest airport to London, Ontario is a flying
+ * club. Filtering by size is the closest free approximation of
+ * "somewhere with scheduled service" available — see `AirportType`.
+ * Widen it to `medium_airport` when the answer comes back empty or
+ * absurdly far, which happens across sparse regions.
+ *
+ * Rows whose coordinates failed to parse are skipped rather than
+ * sorted with a `NaN` distance, which would scatter them through the
+ * results unpredictably.
+ */
+export async function nearestAirports(
+  to: Coordinates,
+  opts: { minType?: AirportSize; limit?: number } = {},
+): Promise<Place[]> {
+  const { minType = "large_airport", limit = 5 } = opts;
+  const floor = SIZE_RANK[minType];
+  const airports = await loadAirports();
+
+  const candidates: { code: string; row: AirportRow; km: number }[] = [];
+
+  for (const [code, row] of airports) {
+    if (sizeRank(row.type) < floor) continue;
+    if (Number.isNaN(row.lat) || Number.isNaN(row.lon)) continue;
+
+    candidates.push({ code, row, km: distanceKm(to, coords(row.lon, row.lat)) });
+  }
+
+  return candidates
+    .sort((a, b) => a.km - b.km)
+    .slice(0, limit)
+    .map(({ code, row }) => toAirportPlace(code, row));
 }
 
 /**
@@ -180,6 +283,7 @@ function parseAirportsCsv(csv: string): Map<string, AirportRow> {
   const header = splitCsvLine(lines[0]);
 
   const nameIdx = header.indexOf("name");
+  const typeIdx = header.indexOf("type");
   const latIdx = header.indexOf("latitude_deg");
   const lonIdx = header.indexOf("longitude_deg");
   const countryIdx = header.indexOf("iso_country");
@@ -198,6 +302,10 @@ function parseAirportsCsv(csv: string): Map<string, AirportRow> {
       name: fields[nameIdx],
       municipality: fields[municipalityIdx],
       isoCountry: fields[countryIdx],
+      // Trusted as-is: an unrecognised value simply ranks as unusable
+      // in `SIZE_RANK`, which is the right answer for a type we don't
+      // know how to interpret.
+      type: fields[typeIdx] as AirportType,
       lat: parseFloat(fields[latIdx]),
       lon: parseFloat(fields[lonIdx]),
     });
