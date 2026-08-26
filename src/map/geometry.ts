@@ -7,6 +7,7 @@ import { greatCircle } from "@turf/great-circle";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
 
 import type { Leg, PlanStatus, TransportMode, Trip } from "../model/trip";
+import { MODE_COLORS } from "../itinerary/labels";
 
 /** Carried on every feature so MapLibre's data-driven expressions can
  * key off them, and so a click handler can map a feature back to its leg. */
@@ -14,12 +15,19 @@ export interface LegProperties {
   legId: string;
   mode: TransportMode;
   status: PlanStatus;
+  /** The mode's colour, carried here so the map needs no lookup table. */
+  color: string;
 }
 
 export type LegFeature = Feature<LineString | MultiLineString, LegProperties>;
 
 function legProperties(leg: Leg): LegProperties {
-  return { legId: leg.id, mode: leg.mode, status: leg.status };
+  return {
+    legId: leg.id,
+    mode: leg.mode,
+    status: leg.status,
+    color: MODE_COLORS[leg.mode],
+  };
 }
 
 function straightLine(leg: Leg): LegFeature {
