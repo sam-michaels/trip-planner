@@ -23,6 +23,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 
 import type { Place } from "../model/trip";
 import { fetchAirport, searchPlaces } from "../lib/placesApi";
+import { placeMatches } from "../lib/placeSearch";
 import { placeSubtitle } from "./labels";
 
 /**
@@ -286,10 +287,10 @@ function buildSuggestions(
   remote: Place[],
   query: string,
 ): Suggestion[] {
-  const trimmed = query.trim().toLowerCase();
-
   const known = knownPlaces
-    .filter((place) => !trimmed || matches(place, trimmed))
+    // `placeMatches` treats an empty query as "everything", which is
+    // what an unfiltered list of the trip's own places should be.
+    .filter((place) => placeMatches(place, query))
     .slice(0, 5)
     .map((place) => ({ place, inTrip: true }));
 
@@ -300,13 +301,4 @@ function buildSuggestions(
     .map((place) => ({ place, inTrip: false }));
 
   return [...known, ...found];
-}
-
-function matches(place: Place, query: string): boolean {
-  return (
-    place.name.toLowerCase().includes(query) ||
-    place.city.toLowerCase().includes(query) ||
-    place.country.toLowerCase().includes(query) ||
-    (place.iata?.toLowerCase() === query)
-  );
 }
