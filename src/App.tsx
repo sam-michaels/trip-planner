@@ -6,39 +6,63 @@
 // shared: clicking a line highlights a card, clicking a card
 // highlights a line. Neither owns it, so their common parent does.
 //
+// WHAT CHANGED WITH THE INVERSION: legs used to be parked in reducer
+// state beside the trip, which meant an edit could write to a derived
+// copy that nothing ever recomputed. Now the reducer holds ONLY the
+// trip, and legs are derived here, once per change, from
+// `trip.destinations` plus whatever routes are known. There is exactly
+// one place a fact about the trip can live, so there is nothing to
+// keep in sync.
+//
 // Still a plain `useReducer` over one object, per the README. A store
 // library would buy nothing at this size.
 // ============================================================
 
-import { useReducer, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 
 import { CostSummary } from "./cost/CostSummary";
 import { ItineraryPanel } from "./itinerary/ItineraryPanel";
-import { tripReducer } from "./itinerary/tripReducer";
+import { planReducer } from "./itinerary/planReducer";
 import { TripMap } from "./map/TripMap";
 import { defaultMode } from "./itinerary/plausibleModes";
 import type { RouteMap, Trip } from "./model/trip";
-import { deriveLegs, sampleTrip } from "./model/trip";
+import { deriveLegs, findGaps, sampleTrip } from "./model/trip";
 
-// TODO(wave-2): an empty `RouteMap` because Unit 6's route engine
-// doesn't exist yet. `deriveLegs` degrades to one placeholder hop per
-// destination pair — moded by geography, so the Atlantic crossing
-// still comes out as a flight — which is enough to seed the leg editor
-// and the map until the engine can propose real routes.
+// TODO(unit-6): an empty `RouteMap` because the route engine doesn't
+// exist yet. This is a supported state, not a stub: `deriveLegs`
+// degrades to one placeholder hop per destination pair — moded by
+// geography, so the Atlantic crossing still comes out as a flight —
+// and `findGaps` reports every pair as unrouted, which is exactly what
+// is true. The app renders, the map draws, and the panel says the legs
+// are guesses. Swapping this for real routes changes nothing else here.
 const NO_ROUTES: RouteMap = new Map();
 
-const initialState = (trip: Trip) => ({
-  trip,
-  legs: deriveLegs(trip, NO_ROUTES, defaultMode),
-});
+const initialState = (trip: Trip) => ({ trip });
 
 function App() {
-  // Lazy init: the initial state is only wanted on mount, and building
-  // it eagerly would re-derive every leg on every render for nothing.
-  const [state, dispatch] = useReducer(tripReducer, sampleTrip, initialState);
+  const [state, dispatch] = useReducer(planReducer, sampleTrip, initialState);
   const [selectedLegId, setSelectedLegId] = useState<string>();
 
-  const { trip, legs } = state;
+  const { trip } = state;
+
+  // Derived, never stored — and memoised because the map diffs its
+  // sources by identity, so a fresh array on every render would make
+  // it redraw for a change it didn't have.
+  const legs = useMemo(() => deriveLegs(trip, NO_ROUTES, defaultMode), [trip]);
+  const gaps = useMemo(() => findGaps(trip, NO_ROUTES), [trip]);
+
+  // A selected leg can stop existing under you: remove Porto, or drag
+  // it above Lisbon, and `lisbon->porto` is no longer a journey this
+  // trip contains. Left alone the app would go on believing something
+  // was selected — nothing highlighted, but the highlight springing
+  // back if the reorder were undone. Cleared during render rather than
+  // from an effect so no frame is painted against a dead selection.
+  if (
+    selectedLegId !== undefined &&
+    !legs.some((leg) => leg.id === selectedLegId)
+  ) {
+    setSelectedLegId(undefined);
+  }
 
   return (
     <div className="flex h-screen flex-col bg-bark-100 text-bark-800">
@@ -67,6 +91,8 @@ function App() {
           <ItineraryPanel
             state={state}
             dispatch={dispatch}
+            legs={legs}
+            gaps={gaps}
             selectedLegId={selectedLegId}
             onSelectLeg={setSelectedLegId}
           />
