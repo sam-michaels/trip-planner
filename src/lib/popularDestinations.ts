@@ -25,6 +25,7 @@
 import type { Place } from "../model/trip";
 import { coords } from "../model/trip";
 import { continentOf, type Continent } from "./geo";
+import { normalizeQuery, placeMatches } from "./placeSearch";
 
 export interface PopularDestination {
   place: Place;
@@ -490,14 +491,17 @@ export function byRegion(region: Continent): PopularDestination[] {
  * box. Not fuzzy — this is ~40 rows, not a search index, and a
  * simple substring match is enough to let someone type "port" and
  * get Porto without them noticing there's no ranking underneath it.
+ *
+ * The predicate itself lives in `placeSearch.ts`: the leg picker
+ * needs the same question answered about the trip's own places, and
+ * two copies of it drift. The `hook` is passed as an extra field so
+ * the browse also answers to what a place is *like* — "penguins"
+ * finds Cape Town.
  */
 export function searchPopular(query: string): PopularDestination[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return POPULAR_DESTINATIONS;
+  if (!normalizeQuery(query)) return POPULAR_DESTINATIONS;
 
   return POPULAR_DESTINATIONS.filter(({ place, hook }) =>
-    [place.name, place.city, place.country, hook].some((field) =>
-      field.toLowerCase().includes(q),
-    ),
+    placeMatches(place, query, [hook]),
   );
 }
