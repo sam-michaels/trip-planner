@@ -18,7 +18,7 @@
 // with no network at all.
 // ============================================================
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Place, RouteHop, Trip } from "../model/trip";
 import {
@@ -29,6 +29,7 @@ import {
   sampleTrip,
 } from "../model/trip";
 import { defaultMode } from "../itinerary/plausibleModes";
+import { distanceKm } from "./geo";
 import {
   buildRouteMap,
   pickRoutes,
@@ -54,19 +55,56 @@ const place = (
 const ALGECIRAS = place("algeciras", "Algeciras", "ES", -5.4526, 36.1408);
 const TANGIER = place("tangier", "Tangier", "MA", -5.834, 35.7595);
 const SEVILLE = place("seville", "Seville", "ES", -5.9845, 37.3891);
+const GRANADA = place("granada", "Granada", "ES", -3.5986, 37.1773);
 const MARRAKESH = place("marrakesh", "Marrakesh", "MA", -8.0083, 31.6295);
+const TORONTO = place("toronto", "Toronto", "CA", -79.3832, 43.6532);
 const MADRID = place("madrid", "Madrid", "ES", -3.7038, 40.4168);
 const BERLIN = place("berlin", "Berlin", "DE", 13.405, 52.52);
 // Deliberately somewhere the curated table doesn't reach: the nearest
 // hub is Montreal, 1,500km away.
 const IQALUIT = place("iqaluit", "Iqaluit", "CA", -68.517, 63.7467);
 
-/** Asserts the engine never touched the network for this pair. */
+/**
+ * The curated table has to carry the pair on its own. Some ends still
+ * attempt the lookup — only a hub in the city itself skips it — so
+ * this doubles as "the answer survives the network being down".
+ */
 const noNetworkNeeded = {
   findAirports: async (): Promise<Place[]> => {
     throw new Error("the curated hub table should have answered this");
   },
 };
+
+const airport = (
+  iata: string,
+  name: string,
+  city: string,
+  country: string,
+  lng: number,
+  lat: number,
+): Place => ({
+  id: `apt-${iata.toLowerCase()}`,
+  name,
+  city,
+  country,
+  coords: coords(lng, lat),
+  iata,
+});
+
+/**
+ * A stand-in for OurAirports: the airports below, nearest first,
+ * within a range the real `nearestAirports` would plausibly return.
+ * Every one of them is a `large_airport` in the real dataset.
+ */
+const datasetOf = (pool: Place[]) => ({
+  findAirports: async (near: [number, number]): Promise<Place[]> =>
+    pool
+      .map((a) => ({ a, km: distanceKm(near, a.coords) }))
+      .filter(({ km }) => km < 600)
+      .sort((x, y) => x.km - y.km)
+      .slice(0, 5)
+      .map(({ a }) => a),
+});
 
 /** Berlin has no curated hub, so it only routes with the live dataset. */
 const findsBrandenburg = {
@@ -176,12 +214,20 @@ describe("proposeRoutes — the motivating trip", () => {
 
 describe("proposeRoutes — choosing between ground and air", () => {
   it("offers a short sea crossing as a ferry, with no air chain", async () => {
-    const options = await proposeRoutes(ALGECIRAS, TANGIER, noNetworkNeeded);
+    // Gibraltar is a large_airport 20km from Algeciras, and without a
+    // floor on the flight itself the engine proposed a FORTY-kilometre
+    // flight out of it — reached by an international border crossing —
+    // in preference to the ferry that has run for a century.
+    const options = await proposeRoutes(
+      ALGECIRAS,
+      TANGIER,
+      datasetOf([
+        airport("GIB", "Gibraltar Airport", "Gibraltar", "GI", -5.3467, 36.1512),
+      ]),
+    );
 
     expect(options[0].hops).toHaveLength(1);
     expect(options[0].hops[0].mode).toBe("ferry");
-    // 55km: no airport is anywhere near the transfer budget for a hop
-    // that short, so flying is not on the table.
     expect(idsOf(options)).toEqual(["ground-ferry"]);
   });
 
@@ -216,6 +262,104 @@ describe("proposeRoutes — choosing between ground and air", () => {
     expect(options[0].hops[1].from.iata).toBe("MAD");
     expect(options[0].hops[1].to.iata).toBe("BER");
     expect(idsOf(options)).toContain("ground-train");
+  });
+
+  it("offers the traveller's own airport alongside the curated hub", async () => {
+    // Birmingham is 150km from Heathrow and 10km from BHX, which flies
+    // to Toronto direct. A shortcut that skipped the airport lookup
+    // whenever any hub was within 250km meant BHX was never looked up
+    // at all.
+    const bhx = airport(
+      "BHX",
+      "Birmingham Airport",
+      "Birmingham",
+      "GB",
+      -1.748,
+      52.4539,
+    );
+    const options = await proposeRoutes(
+      place("bham", "Birmingham", "GB", -1.8904, 52.4862),
+      TORONTO,
+      datasetOf([bhx]),
+    );
+
+    // The hub still leads — that is what the curated table is for on a
+    // transatlantic hop — but the local airport is a real alternative,
+    // not something fetched and thrown away.
+    expect(options[0].hops[1].from.iata).toBe("LHR");
+    expect(options[1].hops[1].from.iata).toBe("BHX");
+  });
+
+  it("takes the local airport over a hub in the next country", async () => {
+    // Lyon's nearest curated hubs are Milan (303km) and Zurich (341km),
+    // both across a border. LYS is 20km away.
+    const lys = airport(
+      "LYS",
+      "Lyon Saint-Exupéry Airport",
+      "Colombier-Saugnieu",
+      "FR",
+      5.0811,
+      45.7256,
+    );
+    const options = await proposeRoutes(
+      place("lyon", "Lyon", "FR", 4.8357, 45.764),
+      TORONTO,
+      datasetOf([lys]),
+    );
+
+    expect(options[0].hops[1].from.iata).toBe("LYS");
+    for (const option of options) {
+      expect(option.hops[0].to.country, option.id).toBe("FR");
+    }
+  });
+
+  it("flies an inland pair across the strait instead of ferrying it", async () => {
+    // Granada and Marrakesh are both inland and 737km apart with the
+    // Strait of Gibraltar between them. A transfer budget of 12% of
+    // that excluded every airport that serves the route, leaving a
+    // ferry hop between two cities neither of which has a port — and
+    // `pickRoutes` stored it, so `findGaps` stayed quiet about it.
+    const agp = airport(
+      "AGP",
+      "Málaga Airport",
+      "Málaga",
+      "ES",
+      -4.4991,
+      36.6749,
+    );
+    const options = await proposeRoutes(GRANADA, MARRAKESH, datasetOf([agp]));
+
+    expect(modesOf(options[0].hops)).toEqual(["train", "flight", "train"]);
+    expect(options.map((o) => o.hops[1]?.from.iata)).toContain("AGP");
+    // The ferry is still offered — it is a real way to make the
+    // crossing — just not the recommendation.
+    expect(idsOf(options).at(-1)).toBe("ground-ferry");
+  });
+
+  it("will not put a ground transfer across open water", async () => {
+    // `isLandConnected` works on continents, so Cuba and the United
+    // States come back land-bridged and the transfer to Miami was
+    // proposed as a 365km TRAIN across the Florida Straits.
+    const options = await proposeRoutes(
+      place("havana", "Havana", "CU", -82.3666, 23.1136),
+      LISBON,
+      datasetOf([
+        airport("MIA", "Miami International", "Miami", "US", -80.287, 25.7959),
+        airport(
+          "HAV",
+          "José Martí International Airport",
+          "Havana",
+          "CU",
+          -82.4091,
+          22.9892,
+        ),
+      ]),
+    );
+
+    expect(options[0].hops[1].from.iata).toBe("HAV");
+    for (const hop of options.flatMap((option) => option.hops)) {
+      expect(hop.to.iata, `${hop.from.name} -> ${hop.to.name}`).not.toBe("MIA");
+    }
   });
 
   it("returns nothing for a place repeated back to back", async () => {
@@ -287,6 +431,25 @@ describe("proposeRoutes — degrading rather than throwing", () => {
     expect(idsOf(options)).toContain("ground-train");
     for (const option of options) {
       expect(modesOf(option.hops), option.id).not.toContain("flight");
+    }
+  });
+
+  it("gives up on a lookup that never settles", async () => {
+    // `loadAirports` fetches without a signal, so a stalled connection
+    // neither resolves nor rejects. An engine that promises never to
+    // reject would then simply never return, which is worse than an
+    // error because nothing upstream can even see it happening.
+    vi.useFakeTimers();
+    try {
+      const pending = proposeRoutes(IQALUIT, LISBON, {
+        findAirports: () => new Promise<Place[]>(() => {}),
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      const options = await pending;
+      expect(options[0].provisional).toBe(true);
+    } finally {
+      vi.useRealTimers();
     }
   });
 
