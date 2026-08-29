@@ -4,14 +4,22 @@
 //
 // Two things worth knowing before reading the drag code:
 //
-//   * TODO(wave-2): this panel still lists LEGS. Destinations are the
-//     spine of the model now and legs are derived from them, so this
-//     becomes a list of destinations with the derived hops shown
-//     between them. It reads `state.legs` — the array the reducer
-//     parks there — until that rewrite lands.
-//   * The list renders `orderedLegs(...)`, never the raw array. Order
-//     was derived from dates, and rendering the raw array would show a
-//     different sequence from the one the old model considered true.
+//   * TODO(unit-8): THIS FILE DOES NOT COMPILE, and that is expected —
+//     it is the panel's rewrite, not a regression. Unit 7 removed the
+//     shim it was written against: `state.legs` and `state.undo.legs`
+//     are gone (legs are derived by the caller now, not stored), the
+//     four leg actions are gone (a leg edit is a destination edit or a
+//     `HopOverride` write — see `tripReducer.ts`), and `./reorder` is
+//     deleted, which takes `orderedLegs` with it. Nothing here was
+//     patched across the unit boundary, because this panel becomes a
+//     list of DESTINATIONS with the derived hops shown between them,
+//     and every one of the references below disappears in that
+//     rewrite rather than being repointed.
+//   * On the `orderedLegs` call specifically: there is nothing to
+//     replace it with, by design. Order was derived from dates; it is
+//     array position now, so `deriveLegs()` already returns the legs
+//     in trip order and sorting them again is exactly the bug the
+//     inversion removed. Render the array as it comes.
 //   * A drop point is an *insertion* index (0..n, "between these two
 //     cards"), while `moveLeg` takes a *final* index ("this card ends
 //     up here"). They differ by one when dragging downward, which is
