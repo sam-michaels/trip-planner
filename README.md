@@ -17,22 +17,49 @@ not invented data.
 ## Status
 
 | Step | What                                                           | State       |
-| ---- | -------------------------------------------------------------- | ----------- |
-| 1    | Core data model (`trip-model.ts`)                              | **Done**    |
-| 2    | MapLibre renderer — mode-aware leg rendering                   | **Done**    |
-| 3a   | Itinerary editor UI — legs                                     | **Done**    |
-| 3b   | Itinerary editor UI — stays and activities                     | Not started |
-| 4    | Cost rollup + multi-currency display                           | **Done**    |
-| 5    | External data: flight pricing, attractions                     | Not started |
-| 6    | Persistence + deep links out to booking sites                  | Not started |
+| ---- | --------------------------------------------------------------- | ----------- |
+| 1    | Core data model (`trip.ts`) — destination-first                 | **Done**    |
+| 2    | MapLibre renderer — mode-aware leg rendering                    | **Done**    |
+| 3a   | Itinerary editor UI — being rebuilt around destinations          | In progress |
+| 3b   | Itinerary editor UI — stays and activities                       | Not started |
+| 4    | Cost rollup + multi-currency display                             | **Done**    |
+| 5    | External data: flight/train/bus ticket pricing, attractions      | Not started |
+| 6    | Persistence + deep links out to booking sites                    | Not started |
 
-The project is now scaffolded with Vite + React + TS + Tailwind; `trip-model.ts`
-lives at `src/model/trip.ts` per the structure below, and the map renderer lives
-under `src/map/`.
+The model inverted from leg-first to destination-first: `Trip.destinations` is
+now the spine, order is explicit array position instead of something derived
+from `departure`, and legs are *derived* from consecutive destination pairs by
+a route engine, with per-hop corrections kept in `Trip.hopOverrides`.
+`Trip.legs` is gone, and so is the model's `orderedLegs()` — the function that
+used to sort legs by `departure` no longer exists in `model/trip.ts`. A
+same-named `orderedLegs()` still lives in `src/itinerary/reorder.ts`; that one
+is part of the pre-inversion leg editor described under Step 3a below, not the
+model, and goes away with it. See "The one idea to understand first" and
+"Derive, don't store" below for why it was worth inverting, and the HOP
+IDENTITY banner in `src/model/trip.ts` for exactly how overrides survive the
+rebuild.
 
-Step 3 was split: legs are editable end-to-end and wired to the map, stays and
-activities are not. Nothing is persisted yet — a reload restores `sampleTrip`.
-That's Step 6's job.
+`src/lib/hubs.ts` (71 curated intercontinental hub airports), `popularDestinations.ts`
+(40 destinations for the "I don't know where yet" browse), and `homeLocation.ts`
+(geolocation → a starting `Place`) landed alongside the model. They exist to
+feed the route engine, the inspiration browse, and the origin-editing UI —
+none of which this step builds; the data is ready before its consumers are.
+
+Step 3a is genuinely mid-flight, not finished and mis-marked: the itinerary
+editor still renders and edits legs today, but through a temporary
+derived-legs cache in `TripState` (see the `TODO` at the top of
+`tripReducer.ts`) that keeps the existing card-based editor working off
+`deriveLegs()` while it's rebuilt around a destination list with an editable
+hop chain underneath each pair. Edits currently land in that cache, not in
+`trip.hopOverrides`, so nothing survives a fresh derivation yet — that's the
+first thing the rebuild has to fix.
+
+This step did **not** build: real flight/train/bus fare and schedule lookup
+against a booking API (Step 5 — `RouteHop.cost`/`operator` are, at most, the
+route engine's guesses, never a live price), the fully nested "super-detailed"
+expansion of one leg into its own boarding/layover sub-legs, or activities
+attached to a specific destination rather than a bare place. All three were
+explicitly deferred by the owner, not overlooked.
 
 Step 4 came forward out of order because the two-currency header it replaced was
 actively misleading — see "Cost is one number" below.
@@ -75,6 +102,13 @@ these choices follow:
 - **FastAPI (Python)** — backend, only once external APIs are involved. Steps 2–4
   need no server at all; do not add one before it earns its place.
 - **Docker** — deployment
+- **Vitest**, `jsdom` environment — unit tests, run with `npm test`. Configured
+  by merging into `vite.config.ts` (see `vitest.config.ts`) rather than a
+  standalone config, so the maplibre-gl worker workaround documented there
+  can't silently get dropped. `jsdom` rather than `node` because tests are
+  expected to cover React components as well as plain logic like `geo.ts` and
+  `hubs.ts`'s coordinate table — paying the small startup cost everywhere
+  beats splitting environments per file at this size.
 
 State management: start with `useState`/`useReducer` on a single `Trip` object.
 Do not reach for Redux/Zustand until there's a demonstrated need.
@@ -126,6 +160,36 @@ stored in `Trip.hopOverrides`, keyed by `hopId(from, to)` — the place pair, ne
 an index. Reorder the destinations and the override stays attached to the same
 physical journey; change a hop's endpoints and it is a different journey, which
 correctly starts fresh. See the HOP IDENTITY banner in `src/model/trip.ts`.
+
+**Two key spaces share that one key function, and conflating them breaks the
+"survives a reorder" guarantee above.** `RouteMap` — the route engine's
+proposals — is keyed by the hop id of the *destination pair*, e.g.
+`hopId(londonOntario, lisbon)`, and its value is the whole chain of hops the
+engine thinks that takes. `Trip.hopOverrides` is keyed by the hop id of an
+*individual hop inside that chain*, e.g. `hopId(torontoPearson,
+lisbonAirport)`. Same `hopId()`, different level — which is what lets you
+correct just the airport bus without disturbing the transatlantic flight
+booked next to it.
+
+The same physical hop can occur more than once in one trip — Lisbon → Porto on
+the way north, then Lisbon → Porto again after a detour south. The override is
+shared between both occurrences, correctly, since it's the same journey with
+the same booking preferences either time. The two occurrences still need
+distinct **leg** ids, though, or React keys and MapLibre feature ids collide
+and the second occurrence silently stops rendering — so `deriveLegs()`
+suffixes repeats (`lisbon->porto#2`). A leg id is therefore not always a
+`HopId`; only a hop's first occurrence in the trip is.
+
+Picking which airport a hop actually flies out of is a heuristic, not a
+lookup, because no free API says which airports have scheduled flights
+between two cities. `nearestAirports()` in `lib/placesApi.ts` can only rank by
+runway size, a proxy that's occasionally absurd — the nearest large airport to
+a city can be a cargo field nobody has ever connected to anywhere useful.
+`lib/hubs.ts` hand-corrects the corridors that matter most with 71 curated
+intercontinental hubs. That table is not a stopgap to delete once something
+better ships; nothing free lists actual routes, so the curated list is the
+permanent second opinion, and simplifying it away reintroduces the absurd
+case.
 
 ### 4. `status` drives the visual language
 
@@ -406,13 +470,16 @@ building it.
 
 ## Suggested structure
 
-Actual, as of Step 3a — `*` marks what's still only planned:
+Actual, as of Step 3a — `*` marks what's still only planned. The `itinerary/`
+list below is the pre-inversion leg editor, still present and working through
+the transitional shim described in Status; it's mid-rewrite around
+destinations, not final.
 
 ```
 src/
   App.tsx                # trip state (useReducer) + the list/map split
   model/
-    trip.ts              # the types + derived functions
+    trip.ts              # destinations are the spine; legs/gaps/totals are derived from them
   map/
     TripMap.tsx          # MapLibre container, selection sync
     geometry.ts          # leg -> GeoJSON, great-circle arcs
@@ -433,11 +500,18 @@ src/
     CostSummary.tsx      # one home-currency total + the breakdown behind it
     useRates.ts          # FX rates as React state
   lib/
-    geo.ts               # distance + country -> continent
-    currency.ts          # FX fetch + conversion, display-time only
-    currencyApi.ts       # country -> currency (vendored table)
-    placesApi.ts         # Nominatim search + OurAirports IATA lookup
+    geo.ts                  # distance + country -> continent
+    currency.ts             # FX fetch + conversion, display-time only
+    currencyApi.ts          # country -> currency (vendored table)
+    placesApi.ts            # Nominatim search + OurAirports IATA/nearestAirports lookup
+    hubs.ts                 # 71 curated intercontinental hub airports, for the route engine
+    popularDestinations.ts  # 40-destination browse for "I don't know where yet"
+    homeLocation.ts         # geolocation -> a starting Place for trip.origin
 ```
+
+Unit tests sit beside the module they test (`geo.test.ts`, `hubs.test.ts`, …)
+rather than in a separate directory, and aren't listed individually above for
+brevity — see "Vitest" under Proposed stack.
 
 ---
 
