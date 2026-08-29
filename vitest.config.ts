@@ -1,4 +1,4 @@
-import { defineConfig, mergeConfig } from 'vitest/config'
+import { configDefaults, defineConfig, mergeConfig } from 'vitest/config'
 import viteConfig from './vite.config.ts'
 
 // Merge into vite.config.ts (via mergeConfig) rather than defining a
@@ -19,6 +19,13 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      // Parallel agent worktrees live under .claude/worktrees/ and each
+      // contains a full copy of src/. Without this, a test run at the
+      // repo root collects every worktree's tests alongside its own —
+      // so `npm test` reports a green suite that is mostly other
+      // branches' code, and a real failure here is buried in it.
+      // vitest's default excludes only cover node_modules and dist.
+      exclude: [...configDefaults.exclude, '.claude/worktrees/**'],
     },
   }),
 )

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Parallel agent worktrees — full checkouts, never committed
+.claude/worktrees/
