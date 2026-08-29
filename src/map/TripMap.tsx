@@ -13,8 +13,8 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 
-import type { Leg, Trip } from "../model/trip";
-import { tripToLegCollection } from "./geometry";
+import type { Leg } from "../model/trip";
+import { legsToCollection } from "./geometry";
 import { addModeIcons } from "./modeSprites";
 import { legLayerIds, legLineLayers, selectedLegFilter } from "./style";
 
@@ -48,8 +48,8 @@ function styleUrl(): string | undefined {
     : undefined;
 }
 
-function boundsForTrip(trip: Trip): LngLatBounds | undefined {
-  const allCoords = trip.legs.flatMap((leg) => [leg.from.coords, leg.to.coords]);
+function boundsForLegs(legs: Leg[]): LngLatBounds | undefined {
+  const allCoords = legs.flatMap((leg) => [leg.from.coords, leg.to.coords]);
   if (allCoords.length === 0) return undefined;
 
   const bounds = new LngLatBounds(allCoords[0], allCoords[0]);
@@ -66,13 +66,19 @@ function legBounds(leg: Leg): LngLatBounds {
 }
 
 interface TripMapProps {
-  trip: Trip;
+  /**
+   * The trip's derived legs. TODO(wave-2): the shell computes these
+   * with `deriveLegs()` and hands them down, since the route engine
+   * that supplies the `RouteMap` doesn't exist yet. The map itself
+   * needs nothing else off the trip — it draws legs and only legs.
+   */
+  legs: Leg[];
   selectedLegId?: string;
   /** Called with a leg id when a line is clicked, `undefined` for empty map. */
   onSelectLeg?: (legId: string | undefined) => void;
 }
 
-export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
+export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const url = styleUrl();
@@ -92,7 +98,7 @@ export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
   }, [onSelectLeg]);
 
   // Map is created once and kept for the component's lifetime — see
-  // the effect below for how trip edits reach an already-live map.
+  // the effect below for how leg edits reach an already-live map.
   // Recreating the map on every trip change would replay the load
   // animation and flash the tiles on every keystroke of an editor.
   useEffect(() => {
@@ -101,7 +107,7 @@ export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
     const map = new MapLibreMap({
       container: containerRef.current,
       style: url,
-      bounds: boundsForTrip(trip),
+      bounds: boundsForLegs(legs),
       fitBoundsOptions: { padding: 48 },
     });
     map.addControl(new NavigationControl(), "top-right");
@@ -113,24 +119,24 @@ export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
       setLayersReady(false);
     };
     // Intentionally only depends on `url`: initial camera uses whatever
-    // `trip` is at mount time, and later trip changes are pushed via
-    // the effect below rather than by rebuilding the map.
+    // `legs` are at mount time, and later changes are pushed via the
+    // effect below rather than by rebuilding the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  // Push trip changes (including the first one, after the style
+  // Push leg changes (including the first one, after the style
   // finishes loading) into the map created above.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const legs = tripToLegCollection(trip);
+    const collection = legsToCollection(legs);
     let cancelled = false;
 
     const applyLegs = async () => {
       const source = map.getSource(LEGS_SOURCE_ID) as GeoJSONSource | undefined;
       if (source) {
-        source.setData(legs);
+        source.setData(collection);
         return;
       }
 
@@ -141,7 +147,7 @@ export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
       // images are rasterizing.
       if (cancelled || mapRef.current !== map) return;
 
-      map.addSource(LEGS_SOURCE_ID, { type: "geojson", data: legs });
+      map.addSource(LEGS_SOURCE_ID, { type: "geojson", data: collection });
       for (const layer of legLineLayers(LEGS_SOURCE_ID)) {
         map.addLayer(layer);
       }
@@ -154,7 +160,7 @@ export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
     return () => {
       cancelled = true;
     };
-  }, [trip]);
+  }, [legs]);
 
   // Selection -> the highlight layer's filter. Repainting a filter is
   // far cheaper than rebuilding the source, and it keeps "which leg is
@@ -175,7 +181,7 @@ export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
     const map = mapRef.current;
     if (!map || !layersReady || !selectedLegId) return;
 
-    const leg = trip.legs.find((candidate) => candidate.id === selectedLegId);
+    const leg = legs.find((candidate) => candidate.id === selectedLegId);
     if (!leg) return;
 
     const bounds = legBounds(leg);
@@ -189,7 +195,7 @@ export function TripMap({ trip, selectedLegId, onSelectLeg }: TripMapProps) {
       // stations) from slamming the camera down to street level.
       map.fitBounds(bounds, { padding: 80, maxZoom: 8, duration: 600 });
     }
-    // `trip` is deliberately absent: this should fire when the
+    // `legs` is deliberately absent: this should fire when the
     // selection changes, not every time any leg is edited.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLegId, layersReady]);

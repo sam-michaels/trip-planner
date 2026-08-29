@@ -4,9 +4,14 @@
 //
 // Two things worth knowing before reading the drag code:
 //
-//   * The list renders `orderedLegs(trip)`, never `trip.legs`. Order
-//     is derived, and rendering the raw array would show a different
-//     sequence from the one the model considers true.
+//   * TODO(wave-2): this panel still lists LEGS. Destinations are the
+//     spine of the model now and legs are derived from them, so this
+//     becomes a list of destinations with the derived hops shown
+//     between them. It reads `state.legs` — the array the reducer
+//     parks there — until that rewrite lands.
+//   * The list renders `orderedLegs(...)`, never the raw array. Order
+//     was derived from dates, and rendering the raw array would show a
+//     different sequence from the one the old model considered true.
 //   * A drop point is an *insertion* index (0..n, "between these two
 //     cards"), while `moveLeg` takes a *final* index ("this card ends
 //     up here"). They differ by one when dragging downward, which is
@@ -24,7 +29,8 @@ import { Fragment, useState } from "react";
 import type { Dispatch } from "react";
 
 import type { CurrencyCode, Leg, Place } from "../model/trip";
-import { findGaps, orderedLegs } from "../model/trip";
+import { orderedLegs } from "./reorder";
+import type { ConnectorGap } from "./LegConnector";
 import { LegConnector } from "./LegConnector";
 import { LegCard } from "./LegCard";
 import { LegEditor } from "./LegEditor";
@@ -59,10 +65,10 @@ export function ItineraryPanel({
   const [dragId, setDragId] = useState<string>();
   const [dropAt, setDropAt] = useState<number>();
 
-  const legs = orderedLegs(trip);
-  const gapsAfter = new Map(findGaps(trip).map((gap) => [gap.afterLegId, gap]));
+  const legs = orderedLegs(state.legs);
+  const gapsAfter = gapsBetweenLegs(legs);
   const knownPlaces = collectPlaces(legs);
-  const tripCurrencies = collectCurrencies(trip.legs);
+  const tripCurrencies = collectCurrencies(state.legs);
 
   function handleDrop() {
     if (dragId === undefined || dropAt === undefined) return;
@@ -274,6 +280,50 @@ function DropIndicator() {
   return (
     <div className="h-0.5 rounded-full bg-ochre-400" aria-hidden />
   );
+}
+
+/**
+ * TODO(wave-2): delete this and read `findGaps(trip, routes)` instead.
+ *
+ * The model's `findGaps()` has changed meaning: it now reports
+ * consecutive DESTINATIONS the route engine could not connect, keyed
+ * by destination, and it needs a `RouteMap` that doesn't exist yet.
+ * Meanwhile this panel still lets you hand-assemble legs, so the old
+ * check — "you fly into LIS and your next leg leaves from Oriente" —
+ * is still the only thing standing between a user and a hole in their
+ * itinerary. Rather than silently drop the warning for a wave, the
+ * check lives here, against the legs actually on screen, until the
+ * panel is rebuilt around destinations and the question stops being
+ * askable.
+ *
+ * Endpoints are compared by city, not by place id: arriving at LIS and
+ * departing from Lisboa Oriente is a real but *minor* gap (a metro
+ * ride), while Porto → Seville with nothing in between is
+ * trip-breaking. Same-city gaps are "soft".
+ *
+ * Keyed by the id of the leg the gap follows, which is what the
+ * connector strip between two cards needs.
+ */
+function gapsBetweenLegs(legs: Leg[]): Map<string, ConnectorGap> {
+  const gaps = new Map<string, ConnectorGap>();
+
+  for (let i = 0; i < legs.length - 1; i++) {
+    const current = legs[i];
+    const next = legs[i + 1];
+    if (current.to.id === next.from.id) continue;
+
+    gaps.set(current.id, {
+      from: current.to,
+      to: next.from,
+      severity:
+        current.to.city === next.from.city &&
+        current.to.country === next.from.country
+          ? "soft"
+          : "hard",
+    });
+  }
+
+  return gaps;
 }
 
 /**

@@ -6,7 +6,7 @@
 import { greatCircle } from "@turf/great-circle";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
 
-import type { Leg, PlanStatus, TransportMode, Trip } from "../model/trip";
+import type { Leg, PlanStatus, TransportMode } from "../model/trip";
 import { MODE_COLORS } from "../itinerary/labels";
 
 /** Carried on every feature so MapLibre's data-driven expressions can
@@ -66,11 +66,11 @@ export function legToFeature(leg: Leg): LegFeature {
   return straightLine(leg);
 }
 
-export function tripToLegCollection(
-  trip: Trip,
+export function legsToCollection(
+  legs: Leg[],
 ): FeatureCollection<LineString | MultiLineString, LegProperties> {
   return {
     type: "FeatureCollection",
-    features: trip.legs.map(legToFeature),
+    features: legs.map(legToFeature),
   };
 }
