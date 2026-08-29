@@ -33,6 +33,7 @@ import type {
 } from "@maplibre/maplibre-gl-style-spec";
 
 import type { PlanStatus } from "../model/trip";
+import { STATUS_COLORS } from "../itinerary/labels";
 import { MODE_ICON_EXPRESSION } from "./modeSprites";
 
 /**
@@ -54,8 +55,12 @@ const STATUS_OPACITY: Record<PlanStatus, number> = {
 };
 
 /**
- * MapLibre `match` expression: a feature's `status` property -> its
- * opacity, so the table above is the only place this is decided.
+ * Build a MapLibre `match` expression from a `Record<PlanStatus, T>`
+ * table: a feature's `status` property -> whatever that table says,
+ * so the table itself stays the only place the mapping is decided.
+ * Shared by every per-status table below (`STATUS_OPACITY` here,
+ * `STATUS_COLORS` for destination markers further down) so there's
+ * one place that knows how to turn such a table into an expression.
  *
  * WHY THE CAST: a `match` expression's tuple type requires a fixed
  * arity (input, then alternating label/output pairs, then a fallback)
@@ -64,12 +69,19 @@ const STATUS_OPACITY: Record<PlanStatus, number> = {
  * shape is correct; the cast just tells TS what a literal-written
  * version of this array would already prove.
  */
-const statusOpacity = [
-  "match",
-  ["get", "status"],
-  ...Object.entries(STATUS_OPACITY).flat(),
-  1,
-] as unknown as ExpressionSpecification;
+function matchByStatus<T extends string | number>(
+  table: Record<PlanStatus, T>,
+  fallback: T,
+): ExpressionSpecification {
+  return [
+    "match",
+    ["get", "status"],
+    ...Object.entries(table).flat(),
+    fallback,
+  ] as unknown as ExpressionSpecification;
+}
+
+const statusOpacity = matchByStatus(STATUS_OPACITY, 1);
 
 /** Layer ids, derived from the source id so callers never spell them out. */
 export function legLayerIds(sourceId: string) {
@@ -201,6 +213,109 @@ export function legLineLayers(sourceId: string): LayerSpecification[] {
       },
       paint: {
         "icon-opacity": statusOpacity,
+      },
+    },
+  ];
+}
+
+// ============================================================
+// Destination markers.
+//
+// A destination (Lisbon, four nights) has to read as a different KIND
+// of thing from an ordinary hop endpoint (LIS airport, a bus transfer)
+// — that distinction is the whole point of the destination-first
+// model, and the map is where it has to be legible at a glance. Two
+// channels do the work, and per the file banner they stay separate
+// from mode:
+//
+//   * SIZE carries `nights` — a week in Lisbon is a bigger deal on the
+//     map than a one-night stopover, and an undecided night count
+//     still draws at a small, deliberate minimum rather than vanishing.
+//   * FILL carries `status`, from the SAME `STATUS_COLORS` table the
+//     itinerary list uses for its status pills — never `MODE_COLORS`,
+//     which belongs to legs and has nothing to do with a place you
+//     simply stop at.
+//
+// A plain hop endpoint gets no marker at all: it's just where a line
+// starts or stops. That absence is itself the contrast — the only
+// dots on the map are places the traveller actually chose to be.
+// ============================================================
+
+/** Layer ids for the destination markers, derived from their own source id. */
+export function destinationLayerIds(sourceId: string) {
+  return {
+    circle: `${sourceId}-circle`,
+    label: `${sourceId}-label`,
+  };
+}
+
+/**
+ * Marker radius by night count. `interpolate` clamps outside its
+ * stops, so a two-week stay doesn't need its own entry to stop
+ * growing forever.
+ *
+ * The `-1` stop is `geometry.ts`'s sentinel for "undecided" — see
+ * `DestinationProperties.nights` there. It gets the smallest radius,
+ * one notch below an explicit `0` (a deliberate day trip), so the two
+ * stay visually distinguishable rather than the map silently forgetting
+ * which one the traveller actually meant.
+ */
+const NIGHTS_RADIUS = [
+  "interpolate",
+  ["linear"],
+  ["get", "nights"],
+  -1, 7,
+  0, 8,
+  1, 10,
+  7, 15,
+  21, 22,
+] as unknown as ExpressionSpecification;
+
+/**
+ * `STATUS_COLORS` is the same table `STATUS_PILL_CLASSES` reads for
+ * the itinerary list's status pills — a destination has no "mode" to
+ * clash with, so nothing stops it sharing status's palette exactly.
+ */
+const statusFill = matchByStatus(STATUS_COLORS, STATUS_COLORS.idea);
+
+export function destinationLayers(sourceId: string): LayerSpecification[] {
+  const ids = destinationLayerIds(sourceId);
+
+  return [
+    {
+      id: ids.circle,
+      type: "circle",
+      source: sourceId,
+      paint: {
+        "circle-radius": NIGHTS_RADIUS,
+        "circle-color": statusFill,
+        "circle-opacity": statusOpacity,
+        // Same white casing trick as the lines: separates the marker
+        // from whatever terrain sits under it.
+        "circle-stroke-color": CASING_COLOR,
+        "circle-stroke-width": 2.5,
+      },
+    },
+    {
+      // The place name, so a marker reads as "Lisbon" without a
+      // separate lookup back to the itinerary list.
+      id: ids.label,
+      type: "symbol",
+      source: sourceId,
+      layout: {
+        "text-field": ["get", "name"],
+        "text-size": 12,
+        "text-offset": [0, 1.6],
+        "text-anchor": "top",
+        // Never let a label eclipse another marker's circle by hiding
+        // it — a missing label is a minor loss, a hidden destination
+        // is not.
+        "text-optional": true,
+      },
+      paint: {
+        "text-color": "#363b30", // bark-800, see index.css
+        "text-halo-color": CASING_COLOR,
+        "text-halo-width": 1.4,
       },
     },
   ];

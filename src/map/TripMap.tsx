@@ -13,13 +13,27 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 
-import type { Leg } from "../model/trip";
-import { legsToCollection } from "./geometry";
+import type { Destination, Leg } from "../model/trip";
+import { destinationsToCollection, legsToCollection } from "./geometry";
 import { addModeIcons } from "./modeSprites";
-import { legLayerIds, legLineLayers, selectedLegFilter } from "./style";
+import {
+  destinationLayers,
+  legLayerIds,
+  legLineLayers,
+  selectedLegFilter,
+} from "./style";
 
 const LEGS_SOURCE_ID = "legs";
 const LAYER_IDS = legLayerIds(LEGS_SOURCE_ID);
+
+const DESTINATIONS_SOURCE_ID = "destinations";
+
+// A stable reference for the "caller hasn't wired this prop up yet"
+// default. A fresh `[]` literal in the destructured default would
+// change identity on every render, and the destinations effect below
+// keys off identity — that would re-push an (empty, unchanged) source
+// to the map on every re-render instead of once.
+const EMPTY_DESTINATIONS: Destination[] = [];
 
 /**
  * WHY A STYLE URL AND NOT RAW TILES: MapLibre renders a full vector
@@ -48,8 +62,20 @@ function styleUrl(): string | undefined {
     : undefined;
 }
 
-function boundsForLegs(legs: Leg[]): LngLatBounds | undefined {
-  const allCoords = legs.flatMap((leg) => [leg.from.coords, leg.to.coords]);
+/**
+ * Initial camera box. Destinations are included alongside legs so a
+ * trip with one destination and no routed legs yet — a normal early
+ * state, not an error — still frames that destination instead of
+ * falling through to the whole-world default view.
+ */
+function boundsForTrip(
+  legs: Leg[],
+  destinations: Destination[],
+): LngLatBounds | undefined {
+  const allCoords = [
+    ...legs.flatMap((leg) => [leg.from.coords, leg.to.coords]),
+    ...destinations.map((d) => d.place.coords),
+  ];
   if (allCoords.length === 0) return undefined;
 
   const bounds = new LngLatBounds(allCoords[0], allCoords[0]);
@@ -70,15 +96,34 @@ interface TripMapProps {
    * The trip's derived legs. TODO(wave-2): the shell computes these
    * with `deriveLegs()` and hands them down, since the route engine
    * that supplies the `RouteMap` doesn't exist yet. The map itself
-   * needs nothing else off the trip — it draws legs and only legs.
+   * needs nothing else off the trip to draw the *routes* — it draws
+   * legs and only legs.
+   *
+   * An empty array is a normal state (a trip with one destination and
+   * no routes yet), not an error — it renders as a bare basemap plus
+   * whatever `destinations` below draws.
    */
   legs: Leg[];
+  /**
+   * The trip's destinations, so the map can mark them as a distinct
+   * kind of thing from an ordinary leg endpoint (an airport, a
+   * transfer station) — see the banner in style.ts. Optional and
+   * defaulted to `[]` so a caller that hasn't wired this prop through
+   * yet still renders exactly as before, just without destination
+   * markers.
+   */
+  destinations?: Destination[];
   selectedLegId?: string;
   /** Called with a leg id when a line is clicked, `undefined` for empty map. */
   onSelectLeg?: (legId: string | undefined) => void;
 }
 
-export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
+export function TripMap({
+  legs,
+  destinations = EMPTY_DESTINATIONS,
+  selectedLegId,
+  onSelectLeg,
+}: TripMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const url = styleUrl();
@@ -107,7 +152,7 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
     const map = new MapLibreMap({
       container: containerRef.current,
       style: url,
-      bounds: boundsForLegs(legs),
+      bounds: boundsForTrip(legs, destinations),
       fitBoundsOptions: { padding: 48 },
     });
     map.addControl(new NavigationControl(), "top-right");
@@ -119,8 +164,8 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
       setLayersReady(false);
     };
     // Intentionally only depends on `url`: initial camera uses whatever
-    // `legs` are at mount time, and later changes are pushed via the
-    // effect below rather than by rebuilding the map.
+    // `legs`/`destinations` are at mount time, and later changes are
+    // pushed via the effects below rather than by rebuilding the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
@@ -161,6 +206,43 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
       cancelled = true;
     };
   }, [legs]);
+
+  // Push destination changes into the map. Gated on `layersReady`
+  // (flipped by the leg effect above, once ITS layers are actually in
+  // the style) rather than on its own independent `load` listener.
+  //
+  // WHY NOT A SECOND `load` LISTENER, which is what this used to be:
+  // `applyLegs` above is async — it awaits sprite rasterization before
+  // calling `addLayer` — so it suspends mid-callback on first load and
+  // yields control back to the event dispatcher. A same-tick `load`
+  // listener registered here would then run to completion and add the
+  // destination layers BEFORE the (still-suspended) leg layers exist.
+  // `map.addLayer` with no `beforeId` appends at the top of the stack,
+  // so that race put destination markers UNDER the routes on ordinary
+  // first load — the opposite of the intent below. Waiting for
+  // `layersReady` instead guarantees the leg layers are already in
+  // place, so these are always added after and paint on top.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !layersReady) return;
+
+    const collection = destinationsToCollection(destinations);
+    const source = map.getSource(DESTINATIONS_SOURCE_ID) as
+      | GeoJSONSource
+      | undefined;
+    if (source) {
+      source.setData(collection);
+      return;
+    }
+
+    map.addSource(DESTINATIONS_SOURCE_ID, {
+      type: "geojson",
+      data: collection,
+    });
+    for (const layer of destinationLayers(DESTINATIONS_SOURCE_ID)) {
+      map.addLayer(layer);
+    }
+  }, [destinations, layersReady]);
 
   // Selection -> the highlight layer's filter. Repainting a filter is
   // far cheaper than rebuilding the source, and it keeps "which leg is

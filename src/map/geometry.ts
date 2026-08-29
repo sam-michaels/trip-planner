@@ -4,9 +4,15 @@
 // ============================================================
 
 import { greatCircle } from "@turf/great-circle";
-import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  LineString,
+  MultiLineString,
+  Point,
+} from "geojson";
 
-import type { Leg, PlanStatus, TransportMode } from "../model/trip";
+import type { Destination, Leg, PlanStatus, TransportMode } from "../model/trip";
 import { MODE_COLORS } from "../itinerary/labels";
 
 /** Carried on every feature so MapLibre's data-driven expressions can
@@ -72,5 +78,66 @@ export function legsToCollection(
   return {
     type: "FeatureCollection",
     features: legs.map(legToFeature),
+  };
+}
+
+// ============================================================
+// Destination -> GeoJSON.
+//
+// A destination is a different KIND of thing from a leg endpoint: it's
+// somewhere the trip stops on purpose, not just wherever a hop happens
+// to start or end (an airport, a transfer station). Legs don't carry
+// that distinction — `Leg.from`/`Leg.to` are just `Place`s — so
+// destinations get their own source and their own point layer rather
+// than being folded into the line geometry above. See style.ts for how
+// they're painted.
+// ============================================================
+
+/** Carried on every destination-marker feature. */
+export interface DestinationProperties {
+  destinationId: string;
+  status: PlanStatus;
+  /** What you'd call the place out loud, for the map label. */
+  name: string;
+  /**
+   * Always a number, since MapLibre expressions can't branch on
+   * "absent" the way TypeScript can — but `-1` is a sentinel for
+   * "the user hasn't decided yet," kept deliberately distinct from an
+   * explicit `0`. `destination.nights ?? 0` would have rendered an
+   * undecided stop identically to a day trip the traveller has
+   * actually chosen to make — collapsing exactly the distinction
+   * `Destination.nights` being optional exists to preserve. See
+   * `NIGHTS_RADIUS` in style.ts for how the two stay visually distinct.
+   */
+  nights: number;
+}
+
+export type DestinationFeature = Feature<Point, DestinationProperties>;
+
+function destinationToFeature(destination: Destination): DestinationFeature {
+  return {
+    type: "Feature",
+    properties: {
+      destinationId: destination.id,
+      status: destination.status,
+      name: destination.place.name,
+      nights: destination.nights ?? -1,
+    },
+    geometry: {
+      type: "Point",
+      // Always through `.coords` on the Place, never a hand-built
+      // tuple — see the [lng, lat] warning on `Coordinates` in
+      // model/trip.ts.
+      coordinates: destination.place.coords,
+    },
+  };
+}
+
+export function destinationsToCollection(
+  destinations: Destination[],
+): FeatureCollection<Point, DestinationProperties> {
+  return {
+    type: "FeatureCollection",
+    features: destinations.map(destinationToFeature),
   };
 }
