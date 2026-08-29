@@ -22,18 +22,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-
-  /*
-   * TEMPORARY. Test files import `vitest`, which isn't installed yet —
-   * without this exclusion `tsc -b` fails on an unresolvable module and
-   * the whole build goes red.
-   *
-   * Delete this line the moment vitest lands. It is load-bearing in the
-   * wrong direction: while it's here, test files are typechecked by no
-   * project at all (vitest does not typecheck by default either — it
-   * strips types with esbuild), so a test referencing a function that
-   * no longer exists stays green until someone runs it.
-   */
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "include": ["src"]
 }
