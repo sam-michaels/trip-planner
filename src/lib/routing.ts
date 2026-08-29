@@ -374,21 +374,23 @@ async function airportsNear(
 }
 
 /**
- * Trim a distance-ordered candidate list to the airports a person
+ * Trim a preference-ordered candidate list to the airports a person
  * would actually weigh against each other.
  *
  * Heathrow and Gatwick are a real choice; Lisbon and Porto are not,
  * even though Porto is the second-nearest hub to Lisbon. The test is
- * relative to whatever the nearest option turned out to be, so it
- * holds both for a city with an airport in it and for one three hours
- * from the nearest runway.
+ * relative to whatever came out in front, so it holds both for a city
+ * with an airport in it and for one three hours from the nearest
+ * runway — and an airport CLOSER than the leader always survives it,
+ * which is what keeps the long-haul "hub first" ordering from
+ * discarding the local alternative.
  */
-function competitive(sorted: Place[], near: (place: Place) => number): Place[] {
-  const [best] = sorted;
+function competitive(ranked: Place[], near: (place: Place) => number): Place[] {
+  const [best] = ranked;
   if (!best) return [];
 
   const ceiling = Math.max(near(best) * 1.5, near(best) + ALT_AIRPORT_SLACK_KM);
-  return sorted
+  return ranked
     .filter((airport) => near(airport) <= ceiling)
     .slice(0, CANDIDATES_PER_END);
 }
@@ -423,8 +425,8 @@ function dedupeById(places: Place[]): Place[] {
 
 /**
  * `iata` is optional on `Place` even though every airport either
- * source produces has one, so both of these fall back rather than
- * printing "undefined" at somebody planning a trip.
+ * source produces has one, so this falls back rather than baking
+ * "undefined" into an option id.
  */
 function code(place: Place): string {
   return place.iata ?? place.id;
