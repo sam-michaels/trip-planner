@@ -204,7 +204,7 @@ export function LegEditor({
         />
 
         {sameEndpoints && (
-          <p className="text-xs text-rust-600">
+          <p className="text-caption text-rust-700">
             A leg has to go somewhere — pick a different destination.
           </p>
         )}
@@ -231,7 +231,7 @@ export function LegEditor({
                 className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 ${
                   selected
                     ? "bg-parchment shadow-sm"
-                    : "border-transparent text-bark-500 hover:bg-parchment/70"
+                    : "border-transparent text-bark-600 hover:bg-parchment/70"
                 }`}
                 // Picking a mode previews the colour the route will be
                 // drawn in, so the editor doubles as the map's legend.
@@ -246,7 +246,7 @@ export function LegEditor({
                 }
               >
                 <Icon className="size-4" aria-hidden />
-                <span className="text-[10px] leading-none font-medium">
+                <span className="text-micro leading-none">
                   {MODE_LABELS[mode]}
                 </span>
               </button>
@@ -260,7 +260,7 @@ export function LegEditor({
           is broken; a sentence explains that it isn't.
         */}
         {modeOptions.unlikely.length > 0 && (
-          <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-bark-400">
+          <p className="mt-1.5 flex items-center gap-1.5 text-caption text-bark-600">
             {modeOptions.likely.length === 1 && !showAllModes && (
               <span>
                 No land route — this leg has to be a{" "}
@@ -270,7 +270,7 @@ export function LegEditor({
             <button
               type="button"
               onClick={() => setShowAllModes((shown) => !shown)}
-              className="underline decoration-dotted underline-offset-2 transition hover:text-bark-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+              className="underline decoration-dotted transition hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
             >
               {showAllModes ? "Show likely modes only" : "Other modes"}
             </button>
@@ -286,10 +286,10 @@ export function LegEditor({
               type="button"
               onClick={() => patch({ status })}
               aria-pressed={draft.status === status}
-              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 ${
+              className={`rounded-lg border px-2 py-1.5 text-caption font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 ${
                 draft.status === status
                   ? "shadow-sm"
-                  : "border-transparent text-bark-500 hover:bg-parchment/70"
+                  : "border-transparent text-bark-600 hover:bg-parchment/70"
               }`}
               // Same trick as the mode row above: picking a status
               // previews the colour that status is drawn in everywhere
@@ -370,7 +370,7 @@ export function LegEditor({
         </div>
 
         {convertedCost !== undefined && (
-          <p className="mt-1 text-[11px] text-bark-500">
+          <p className="mt-1 text-caption text-bark-600">
             ≈{" "}
             <span className="font-medium tabular-nums">
               {formatMoney({
@@ -388,7 +388,7 @@ export function LegEditor({
           type="button"
           onClick={() => setShowDetails((shown) => !shown)}
           aria-expanded={showDetails}
-          className="flex items-center gap-1 text-xs font-medium text-bark-500 transition hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+          className="flex items-center gap-1 text-label font-medium text-bark-700 transition hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
         >
           <ChevronRight
             className={`size-3.5 transition-transform ${showDetails ? "rotate-90" : ""}`}
@@ -456,7 +456,7 @@ export function LegEditor({
           <button
             type="button"
             onClick={onDelete}
-            className="rounded-lg p-2 text-bark-400 transition hover:bg-rust-50 hover:text-rust-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust-500"
+            className="rounded-lg p-2 text-bark-500 transition hover:bg-rust-50 hover:text-rust-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust-500"
             title="Delete this leg"
             aria-label="Delete this leg"
           >
@@ -467,14 +467,14 @@ export function LegEditor({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-3 py-1.5 text-sm font-medium text-bark-600 transition hover:bg-bark-200/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+          className="rounded-lg px-3 py-1.5 text-body font-medium text-bark-700 transition hover:bg-bark-200/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!canSave}
-          className="rounded-lg bg-moss-700 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-moss-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 disabled:cursor-not-allowed disabled:bg-bark-300"
+          className="rounded-lg bg-moss-700 px-3 py-1.5 text-body font-medium text-white transition hover:bg-moss-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 disabled:cursor-not-allowed disabled:bg-bark-500"
         >
           Save leg
         </button>
@@ -490,8 +490,14 @@ export function LegEditor({
  * can't reliably override it — which is how the currency select ends
  * up eating the amount input. Width is stated at each use instead.
  */
+// Placeholder moves off bark-400 (2.6:1) to bark-600 (5.7:1) — not
+// bark-500, which looks like the safe middle step and is still only
+// 3.9:1. A placeholder is text someone has to read to know what the
+// field wants, so it's held to the same 4.5:1 as body copy. It still
+// reads as lighter than the bark-900 value typed into it, which is
+// the only distinction the placeholder actually needs to make.
 const inputClasses =
-  "rounded-lg border border-bark-200 bg-parchment px-2.5 py-1.5 text-sm text-bark-900 placeholder:text-bark-400 focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100";
+  "rounded-lg border border-bark-200 bg-parchment px-2.5 py-1.5 text-body text-bark-900 placeholder:text-bark-600 focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100";
 
 function Field({
   label,
@@ -502,7 +508,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-bark-500">
+      <span className="mb-1 block text-label font-medium text-bark-700">
         {label}
       </span>
       {children}

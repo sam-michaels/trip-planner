@@ -43,9 +43,17 @@ function App() {
   return (
     <div className="flex h-screen flex-col bg-bark-100 text-bark-800">
       <header className="flex shrink-0 items-center gap-4 border-b border-bark-200 bg-parchment px-4 py-2.5">
+        {/*
+          The one place the display face appears in the running app.
+          The trip's name is the only thing on screen that belongs to
+          this trip rather than to the tool, so it's the only thing
+          set in something other than the interface's own voice.
+        */}
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold">{trip.title}</h1>
-          <p className="text-xs text-bark-500">
+          <h1 className="truncate font-display text-display text-bark-900">
+            {trip.title}
+          </h1>
+          <p className="text-caption text-bark-600">
             {trip.travellers}{" "}
             {trip.travellers === 1 ? "traveller" : "travellers"}
           </p>

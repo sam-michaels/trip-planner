@@ -150,19 +150,19 @@ export function PlacePicker({
           onClick={() => setOpen(true)}
           className="flex w-full items-center gap-2 rounded-lg border border-bark-200 bg-parchment px-3 py-2 text-left transition hover:border-bark-300 hover:bg-bark-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
         >
-          <MapPin className="size-4 shrink-0 text-bark-400" aria-hidden />
+          <MapPin className="size-4 shrink-0 text-bark-500" aria-hidden />
           {value ? (
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-bark-900">
+              <span className="block truncate text-body font-medium text-bark-900">
                 {value.name}
               </span>
-              <span className="block truncate text-xs text-bark-500">
+              <span className="block truncate text-caption text-bark-600">
                 {placeSubtitle(value)}
                 {value.iata ? ` · ${value.iata}` : ""}
               </span>
             </span>
           ) : (
-            <span className="flex-1 text-sm text-bark-400">
+            <span className="flex-1 text-body text-bark-600">
               Search for a place…
             </span>
           )}
@@ -176,7 +176,7 @@ export function PlacePicker({
       <FieldLabel>{label}</FieldLabel>
       <div className="rounded-lg border border-ochre-400 bg-parchment ring-2 ring-ochre-100">
         <div className="flex items-center gap-2 px-3 py-2">
-          <Search className="size-4 shrink-0 text-bark-400" aria-hidden />
+          <Search className="size-4 shrink-0 text-bark-500" aria-hidden />
           <input
             ref={inputRef}
             value={query}
@@ -191,17 +191,17 @@ export function PlacePicker({
             aria-expanded
             aria-controls={listId}
             aria-autocomplete="list"
-            className="w-full bg-transparent text-sm text-bark-900 placeholder:text-bark-400 focus:outline-none"
+            className="w-full bg-transparent text-body text-bark-900 placeholder:text-bark-600 focus:outline-none"
           />
           {searching && (
             <Loader2
-              className="size-4 shrink-0 animate-spin text-bark-400"
+              className="size-4 shrink-0 animate-spin text-bark-500"
               aria-label="Searching"
             />
           )}
         </div>
 
-        <ul id={listId} role="listbox" className="max-h-64 overflow-y-auto border-t border-bark-100">
+        <ul id={listId} role="listbox" className="scroll-quiet max-h-64 overflow-y-auto border-t border-bark-100">
           {suggestions.map((suggestion, index) => (
             <li key={suggestion.place.id}>
               <button
@@ -221,21 +221,21 @@ export function PlacePicker({
                 }`}
               >
                 {suggestion.place.iata ? (
-                  <Plane className="size-4 shrink-0 text-bark-400" aria-hidden />
+                  <Plane className="size-4 shrink-0 text-bark-500" aria-hidden />
                 ) : (
-                  <MapPin className="size-4 shrink-0 text-bark-400" aria-hidden />
+                  <MapPin className="size-4 shrink-0 text-bark-500" aria-hidden />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-bark-900">
+                  <span className="block truncate text-body text-bark-900">
                     {suggestion.place.name}
                   </span>
-                  <span className="block truncate text-xs text-bark-500">
+                  <span className="block truncate text-caption text-bark-600">
                     {placeSubtitle(suggestion.place)}
                     {suggestion.place.iata ? ` · ${suggestion.place.iata}` : ""}
                   </span>
                 </span>
                 {suggestion.inTrip && (
-                  <span className="shrink-0 rounded bg-bark-100 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-bark-500 uppercase">
+                  <span className="shrink-0 rounded bg-bark-100 px-1.5 py-0.5 text-micro text-bark-700 uppercase">
                     In trip
                   </span>
                 )}
@@ -247,7 +247,7 @@ export function PlacePicker({
           ))}
 
           {suggestions.length === 0 && (
-            <li className="px-3 py-3 text-xs text-bark-500">
+            <li className="px-3 py-3 text-caption text-bark-600">
               {error
                 ? error
                 : searching
@@ -265,7 +265,7 @@ export function PlacePicker({
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="mb-1 block text-xs font-medium text-bark-500">
+    <span className="mb-1 block text-label font-medium text-bark-700">
       {children}
     </span>
   );

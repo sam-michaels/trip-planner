@@ -157,23 +157,30 @@ export function ItineraryPanel({
   return (
     <div className="flex h-full flex-col bg-bark-100">
       <div className="flex items-center justify-between border-b border-bark-200 bg-parchment px-3 py-2">
-        <h2 className="text-xs font-semibold tracking-wide text-bark-500 uppercase">
+        <h2 className="text-micro font-semibold text-bark-700 uppercase">
           Itinerary
         </h2>
-        <span className="text-xs text-bark-400">
+        <span className="text-caption text-bark-600">
           {legs.length} {legs.length === 1 ? "leg" : "legs"}
         </span>
       </div>
 
       <div
-        className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3"
+        className="scroll-quiet min-h-0 flex-1 space-y-1 overflow-y-auto p-3"
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDrop}
       >
+        {/* The other place the display face earns its keep. An empty
+            state is the one screen with nothing on it but voice, so
+            it's where a face that reads as handwriting does the most
+            work — and it's the moment the app most needs to look like
+            an invitation rather than a failed load. */}
         {legs.length === 0 && !editor && (
           <div className="rounded-xl border border-dashed border-bark-300 px-4 py-8 text-center">
-            <p className="text-sm font-medium text-bark-700">No legs yet</p>
-            <p className="mt-1 text-xs text-bark-500">
+            <p className="font-display text-display text-bark-800">
+              Nothing planned yet
+            </p>
+            <p className="mx-auto mt-1.5 max-w-[34ch] text-caption text-bark-600">
               Add the first movement of the trip — it can be a rough idea with
               no date or price.
             </p>
@@ -240,7 +247,7 @@ export function ItineraryPanel({
               <button
                 type="button"
                 onClick={startAppendedLeg}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-bark-300 px-3 py-2.5 text-sm font-medium text-bark-500 transition hover:border-bark-400 hover:bg-parchment hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-bark-300 px-3 py-2.5 text-body font-medium text-bark-600 transition hover:border-bark-400 hover:bg-parchment hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
               >
                 <Plus className="size-4" aria-hidden />
                 Add leg
@@ -253,11 +260,18 @@ export function ItineraryPanel({
           role="status"
           className="flex items-start gap-2 border-t border-bark-200 bg-moss-800 px-3 py-2 text-parchment"
         >
-          <p className="min-w-0 flex-1 text-xs leading-relaxed">{undo.note}</p>
+          {/* Light text on the one dark surface in the app, so it gets
+              the light-on-dark compensation: extra leading and a
+              little tracking. Parchment on moss-800 is a ~11:1 pair,
+              and at that contrast small type blooms and closes up its
+              own counters unless it's given room. */}
+          <p className="min-w-0 flex-1 text-caption leading-relaxed tracking-[0.01em]">
+            {undo.note}
+          </p>
           <button
             type="button"
             onClick={() => dispatch({ type: "undo" })}
-            className="flex shrink-0 items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-xs font-medium transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex shrink-0 items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-caption font-medium transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <Undo2 className="size-3.5" aria-hidden />
             Undo
