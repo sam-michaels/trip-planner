@@ -237,27 +237,39 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
 
   if (!url) {
     return (
-      <div className="flex h-full items-center justify-center bg-bark-50 p-8 text-center text-bark-600">
-        <p className="max-w-sm">
-          Set{" "}
-          <code className="rounded bg-bark-200 px-1 py-0.5 text-sm">
-            VITE_MAPTILER_KEY
-          </code>{" "}
-          in{" "}
-          <code className="rounded bg-bark-200 px-1 py-0.5 text-sm">
-            .env.local
-          </code>{" "}
-          to render the map. A free key is available at{" "}
-          <a
-            className="underline"
-            href="https://cloud.maptiler.com/account/keys/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            cloud.maptiler.com
-          </a>
-          .
-        </p>
+      <div className="flex h-full items-center justify-center bg-bark-50 p-8 text-center">
+        {/*
+          The third and last home of the display face. This is the
+          first thing a new contributor sees, and it was a wall of
+          undifferentiated prose with no entry point — so it now leads
+          with the problem named, and the two literals you have to
+          type exactly are set in mono, which is what mono is for.
+        */}
+        <div className="max-w-[46ch]">
+          <p className="font-display text-display text-bark-900">
+            The map needs a key
+          </p>
+          <p className="mt-2 text-body text-bark-700">
+            Set{" "}
+            <code className="rounded bg-bark-200 px-1 py-0.5 font-mono text-caption text-bark-900">
+              VITE_MAPTILER_KEY
+            </code>{" "}
+            in{" "}
+            <code className="rounded bg-bark-200 px-1 py-0.5 font-mono text-caption text-bark-900">
+              .env.local
+            </code>{" "}
+            to render the map. A free key is available at{" "}
+            <a
+              className="underline decoration-bark-400 hover:decoration-bark-700"
+              href="https://cloud.maptiler.com/account/keys/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              cloud.maptiler.com
+            </a>
+            .
+          </p>
+        </div>
       </div>
     );
   }

@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Fraunces, variable, all axes (opsz/wght/SOFT/WONK). Self-hosted
+   rather than loaded from a CDN: this is a trip planner, so it gets
+   opened on hotel wifi and in airports, and a display face that
+   arrives over someone else's network is a display face that
+   sometimes doesn't. Subsets are unicode-range gated, so an English
+   itinerary downloads one file and a Portuguese place name reaches
+   for latin-ext only if it needs to. See `--font-display` below for
+   why the full-axis build earns its weight. */
+@import "@fontsource-variable/fraunces/full.css";
+
 /* ============================================================
    The palette: soft forest.
  
@@ -89,4 +99,125 @@
   --color-heather-600: #645378;
   --color-heather-700: #4f425f;
   --color-heather-800: #3c3248;
+
+  /* ============================================================
+     Type.
+
+     Two families and six roles, named for the job rather than the
+     size — `text-caption`, not `text-[11px]` — because the sizes
+     have already moved once and the call sites shouldn't have to
+     know. Every role carries its own line-height, which is the
+     thing arbitrary Tailwind sizes silently do NOT do: `text-[11px]`
+     sets a font-size and lets the leading fall through from whatever
+     parent happens to be above it, so twelve elements in this app
+     were being led by a container sized for something else.
+
+     Everything is rem, so the browser's font-size setting actually
+     scales the app. Mixing rem roles with px roles meant a reader
+     who had turned text up got some of the interface enlarged and
+     the smallest, most in-need parts of it left exactly where they
+     were.
+     ============================================================ */
+
+  /* The system stack, stated rather than inherited. Tailwind's
+     preflight would supply this anyway; writing it down means
+     DESIGN.md is describing a token that exists. */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+
+  /* Fraunces, and the reason the full-axis build is worth its bytes:
+     SOFT rounds the terminals and WONK swaps in the canted, slightly
+     wrong-looking alternates. Those two axes are the entire argument
+     for this face over any other serif — without them it's a
+     competent book serif, and with them it reads as *written*, which
+     is what "The Field Notebook" is asking for.
+
+     opsz 20 matches the size it's actually set at (the axis is a
+     real optical size, not a scale factor), so the display role gets
+     the drawing intended for 20px rather than the 14pt default.
+
+     Georgia first in the fallback because its x-height and width are
+     close enough that a swap doesn't reflow the header. */
+  --font-display: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --font-display--font-variation-settings: "SOFT" 45, "WONK" 1, "opsz" 20;
+
+  /* 11px. The status pill and the two uppercase labels. Tracked out
+     because small caps-height text sets too tight, and given real
+     leading so a pill's box is predictable. */
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1.2;
+  --text-micro--letter-spacing: 0.02em;
+  --text-micro--font-weight: 500;
+
+  /* 12px. Supporting lines: the connector's three, meta, notes. */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.45;
+
+  /* 13px. Field labels, counts, the currency table — text that is
+     read as a label rather than as prose. */
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.4;
+
+  /* 15px. The working size: form fields, buttons, a leg's endpoints. */
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.45;
+
+  /* 16px. Data that has to be read exactly — the trip total. */
+  --text-title: 1rem;
+  --text-title--line-height: 1.3;
+
+  /* 20px. Fraunces only. The trip's name and the empty states, and
+     nothing else. Negative tracking because Fraunces sets loose at
+     display sizes, well inside the -0.04em floor. */
+  --text-display: 1.25rem;
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.008em;
+  --text-display--font-weight: 500;
+}
+
+/* ============================================================
+   The surfaces we didn't draw.
+
+   Selection, the caret, the scrollbar and the underline all ship
+   with browser defaults that belong to no design system — a blue
+   highlight in an app with no blue in it, a grey scrollbar next to
+   a sage one. They're cheap to theme and they're the difference
+   between an interface that was built and one that was assembled.
+   ============================================================ */
+
+::selection {
+  /* Moss-200 rather than the accent itself: selection lands under
+     text that still has to be read while it's selected, and this
+     keeps bark-900 at 9.6:1 on top of it. */
+  background-color: var(--color-moss-200);
+  color: var(--color-bark-900);
+}
+
+:root {
+  /* The checkbox/radio/range accent and the text caret, which
+     otherwise arrive as the OS blue. */
+  accent-color: var(--color-moss-600);
+  caret-color: var(--color-moss-700);
+
+  /* Fraunces is a real optical-size font; let the browser drive the
+     axis from the rendered size wherever we haven't pinned it. */
+  font-optical-sizing: auto;
+}
+
+/* The itinerary and the picker both scroll. A default scrollbar is
+   the one piece of chrome in the app that isn't sage. */
+@supports (scrollbar-width: thin) {
+  .scroll-quiet {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-bark-300) transparent;
+  }
+}
+
+/* Underlines sit too close to the baseline at these sizes and clip
+   the descenders of "g" and "p" in a place name. */
+a,
+.underline {
+  text-underline-offset: 0.2em;
 }

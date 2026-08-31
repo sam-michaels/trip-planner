@@ -1,0 +1,424 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-31T19:12:50.303593Z",
+  "title": "Design System: Trip Planner",
+  "extensions": {
+    "colorMeta": {
+      "moss-500": {
+        "role": "primary",
+        "displayName": "Moss",
+        "canonical": "#5c8752",
+        "tonalRamp": [
+          "#f0f5ee",
+          "#dfeadb",
+          "#c2d8bb",
+          "#9dbf94",
+          "#7aa36f",
+          "#5c8752",
+          "#486b40",
+          "#3a5534",
+          "#2e422a"
+        ]
+      },
+      "ochre-500": {
+        "role": "secondary",
+        "displayName": "Ochre",
+        "canonical": "#b0873a",
+        "tonalRamp": [
+          "#faf5e8",
+          "#f4ead0",
+          "#e8d6a6",
+          "#d9bd76",
+          "#c9a34f",
+          "#b0873a",
+          "#8e6b2d",
+          "#6f5324",
+          "#55401d"
+        ]
+      },
+      "heather-500": {
+        "role": "secondary",
+        "displayName": "Heather",
+        "canonical": "#7d6a94",
+        "tonalRamp": [
+          "#f4f2f7",
+          "#e8e4ee",
+          "#d3ccdd",
+          "#b6aac7",
+          "#9887ae",
+          "#7d6a94",
+          "#645378",
+          "#4f425f",
+          "#3c3248"
+        ]
+      },
+      "rust-500": {
+        "role": "tertiary",
+        "displayName": "Rust",
+        "canonical": "#a85644",
+        "tonalRamp": [
+          "#fbf1ee",
+          "#f5e0da",
+          "#e9c2b8",
+          "#d79b8c",
+          "#c07361",
+          "#a85644",
+          "#8a4335",
+          "#6d352a",
+          "#532921"
+        ]
+      },
+      "bark-500": {
+        "role": "neutral",
+        "displayName": "Bark",
+        "canonical": "#7c836c",
+        "tonalRamp": [
+          "#f6f7f2",
+          "#eaeee2",
+          "#d7dcc9",
+          "#bcc3aa",
+          "#9aa189",
+          "#7c836c",
+          "#616855",
+          "#4c5243",
+          "#363b30",
+          "#262a22"
+        ]
+      },
+      "parchment": {
+        "role": "neutral",
+        "displayName": "Parchment",
+        "canonical": "#fcfdf8",
+        "tonalRamp": [
+          "#fcfdf8"
+        ]
+      },
+      "mode-flight": {
+        "role": "custom",
+        "displayName": "Terracotta (flight)",
+        "canonical": "#b5714f",
+        "tonalRamp": []
+      },
+      "mode-train": {
+        "role": "custom",
+        "displayName": "Pine-teal (train)",
+        "canonical": "#3f7d70",
+        "tonalRamp": []
+      },
+      "mode-bus": {
+        "role": "custom",
+        "displayName": "Heather (bus)",
+        "canonical": "#7d6a94",
+        "tonalRamp": []
+      },
+      "mode-car": {
+        "role": "custom",
+        "displayName": "Rust (car)",
+        "canonical": "#a85644",
+        "tonalRamp": []
+      },
+      "mode-ferry": {
+        "role": "custom",
+        "displayName": "Slate water (ferry)",
+        "canonical": "#5b7f9e",
+        "tonalRamp": []
+      },
+      "mode-walk": {
+        "role": "custom",
+        "displayName": "Dry olive (walk)",
+        "canonical": "#7d8f4a",
+        "tonalRamp": []
+      },
+      "route-casing": {
+        "role": "custom",
+        "displayName": "Route casing",
+        "canonical": "#ffffff",
+        "tonalRamp": []
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Fraunces, SOFT 45 / WONK 1 / opsz 20. The trip's name and the empty states — three places in the app, and nothing that repeats."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Data that has to be read exactly. The trip total, and nothing else."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "The working size: form fields, buttons, a leg's endpoints."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, counts, the currency table, the connector headline."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Supporting lines: the leg card's meta row, the connector's note and detail, the italic interlude."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Status pills and uppercase section labels. The floor of the system; nothing is smaller."
+      }
+    },
+    "shadows": [
+      {
+        "name": "state-lift",
+        "value": "0 1px 3px rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)",
+        "purpose": "Selected leg card and selected editor chips. Marks state, never rest."
+      },
+      {
+        "name": "overlay",
+        "value": "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)",
+        "purpose": "The cost breakdown popover — the only thing that floats over content."
+      },
+      {
+        "name": "selection-ring",
+        "value": "0 0 0 3px <mode colour at 15% alpha>",
+        "purpose": "Selected leg card, in that leg's own mode colour, paired with a matching border."
+      },
+      {
+        "name": "map-halo",
+        "value": "line-width 16, line-blur 3, line-opacity 0.5",
+        "purpose": "The selected route's glow, above the white casing so the route lights up in place."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default easing on every hover, focus and selection transition."
+      },
+      {
+        "name": "duration-default",
+        "value": "150ms",
+        "purpose": "Colour, border and background transitions on interactive elements."
+      },
+      {
+        "name": "chevron-rotate",
+        "value": "transform 150ms; rotate(180deg) when open",
+        "purpose": "The cost disclosure chevron — the only transform in the interface."
+      },
+      {
+        "name": "drag-fade",
+        "value": "opacity 0.4",
+        "purpose": "The source card while it is being dragged."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ],
+    "fonts": [
+      {
+        "name": "Fraunces Variable",
+        "role": "display",
+        "delivery": "self-hosted via @fontsource-variable/fraunces (full-axis build), unicode-range subset, font-display: swap",
+        "axes": "SOFT 45, WONK 1, opsz 20, wght 500",
+        "fallback": "Georgia, Times New Roman, serif"
+      },
+      {
+        "name": "System sans",
+        "role": "everything else",
+        "delivery": "no download",
+        "fallback": "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Trip Title (display)",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The one place the display face appears in the running app. Fraunces with SOFT and WONK on, over the system-sans supporting line.",
+      "html": "<div class=\"ds-trip\"><p class=\"ds-trip-name\">Portugal &#8594; Spain &#8594; Morocco</p><p class=\"ds-trip-sub\">2 travellers</p></div>",
+      "css": ".ds-trip { font-family: ui-sans-serif, system-ui, sans-serif; }\n.ds-trip-name { margin: 0; font-family: 'Fraunces Variable', Georgia, 'Times New Roman', serif; font-variation-settings: 'SOFT' 45, 'WONK' 1, 'opsz' 20; font-size: 1.25rem; font-weight: 500; line-height: 1.2; letter-spacing: -0.008em; color: var(--color-bark-900, #262a22); }\n.ds-trip-sub { margin: 0; font-size: 0.75rem; line-height: 1.45; color: var(--color-bark-600, #616855); }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The only filled button in the app. Commits an edit — Save on the leg editor.",
+      "html": "<button class=\"ds-btn-primary\">Save</button>",
+      "css": ".ds-btn-primary { background: var(--color-moss-700, #3a5534); color: #fff; font: 500 0.9375rem/1.45 ui-sans-serif, system-ui, sans-serif; padding: 6px 12px; border: none; border-radius: 8px; cursor: pointer; transition: background 150ms cubic-bezier(0.4,0,0.2,1); }\n.ds-btn-primary:hover { background: var(--color-moss-600, #486b40); }\n.ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-moss-500, #5c8752); }\n.ds-btn-primary:disabled { background: var(--color-bark-300, #bcc3aa); cursor: not-allowed; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Dismisses without committing — Cancel. Sits back until hovered.",
+      "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: var(--color-bark-600, #616855); font: 500 0.9375rem/1.45 ui-sans-serif, system-ui, sans-serif; padding: 6px 12px; border: none; border-radius: 8px; cursor: pointer; transition: background 150ms cubic-bezier(0.4,0,0.2,1); }\n.ds-btn-ghost:hover { background: rgba(215,220,201,0.7); }\n.ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-moss-500, #5c8752); }"
+    },
+    {
+      "name": "Add Leg Button",
+      "kind": "button",
+      "refersTo": "button-dashed",
+      "description": "A full-width dashed affordance at the end of the list. Dashed borders mark a container waiting to be filled.",
+      "html": "<button class=\"ds-btn-dashed\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"M12 5v14\"/></svg>Add leg</button>",
+      "css": ".ds-btn-dashed { display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; background: transparent; color: var(--color-bark-500, #7c836c); font: 500 0.9375rem/1.45 ui-sans-serif, system-ui, sans-serif; padding: 10px 12px; border: 1px dashed var(--color-bark-300, #bcc3aa); border-radius: 12px; cursor: pointer; transition: color 150ms, background 150ms, border-color 150ms; }\n.ds-btn-dashed:hover { border-color: var(--color-bark-600, #616855); background: var(--color-parchment, #fcfdf8); color: var(--color-bark-900, #262a22); }\n.ds-btn-dashed:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-moss-500, #5c8752); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "Every field in the editor. Focus is a border shift plus a soft tint ring, never a glow.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Operator</span><input class=\"ds-input\" placeholder=\"e.g. Comboios de Portugal\" /></label>",
+      "css": ".ds-field { display: block; }\n.ds-field-label { display: block; margin-bottom: 4px; color: var(--color-bark-500, #7c836c); font: 500 0.8125rem/1.4 ui-sans-serif, system-ui, sans-serif; }\n.ds-input { width: 100%; background: var(--color-parchment, #fcfdf8); color: var(--color-bark-900, #262a22); font: 400 0.9375rem/1.45 ui-sans-serif, system-ui, sans-serif; padding: 6px 10px; border: 1px solid var(--color-bark-200, #d7dcc9); border-radius: 8px; transition: border-color 150ms, box-shadow 150ms; }\n.ds-input::placeholder { color: var(--color-bark-600, #616855); }\n.ds-input:focus { outline: none; border-color: var(--color-moss-400, #7aa36f); box-shadow: 0 0 0 2px var(--color-moss-100, #dfeadb); }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill-idea",
+      "description": "How firm the plan is. The same three colours on every row — that is what makes the list countable. Dashed until booked.",
+      "html": "<span class=\"ds-pill ds-pill-idea\">Idea</span> <span class=\"ds-pill ds-pill-planned\">Planned</span> <span class=\"ds-pill ds-pill-booked\">Booked</span>",
+      "css": ".ds-pill { display: inline-block; border-radius: 9999px; padding: 2px 6px; font: 500 0.6875rem/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.02em; }\n.ds-pill-idea { border: 1px dashed var(--color-heather-300, #b6aac7); background: var(--color-heather-50, #f4f2f7); color: var(--color-heather-600, #645378); }\n.ds-pill-planned { border: 1px dashed var(--color-ochre-300, #d9bd76); background: var(--color-ochre-50, #faf5e8); color: var(--color-ochre-700, #6f5324); }\n.ds-pill-booked { border: 1px solid var(--color-moss-300, #9dbf94); background: var(--color-moss-100, #dfeadb); color: var(--color-moss-700, #3a5534); }"
+    },
+    {
+      "name": "Leg Card",
+      "kind": "card",
+      "refersTo": "card-leg",
+      "description": "The signature component. Mode is the chip on the left in that mode's colour; status is the pill on the right in the same colour on every row. Selection rings in the leg's own mode colour.",
+      "html": "<div class=\"ds-leg is-selected\"><div class=\"ds-leg-main\"><div class=\"ds-leg-top\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"9\" cy=\"12\" r=\"1\"/><circle cx=\"9\" cy=\"5\" r=\"1\"/><circle cx=\"9\" cy=\"19\" r=\"1\"/><circle cx=\"15\" cy=\"12\" r=\"1\"/><circle cx=\"15\" cy=\"5\" r=\"1\"/><circle cx=\"15\" cy=\"19\" r=\"1\"/></svg><span class=\"ds-leg-mode\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\"/></svg></span><span class=\"ds-leg-title\">Toronto <span class=\"ds-leg-arrow\">&#8594;</span> Lisbon</span><span class=\"ds-pill ds-pill-idea\">Idea</span></div><p class=\"ds-leg-sub\">Toronto Pearson &#8594; Humberto Delgado</p><div class=\"ds-leg-meta\"><span>No date or operator yet</span><span class=\"ds-leg-cost\">CA$640</span></div></div><button class=\"ds-leg-edit\" aria-label=\"Edit\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/><path d=\"m15 5 4 4\"/></svg></button></div>",
+      "css": ".ds-leg { position: relative; display: flex; background: var(--color-parchment, #fcfdf8); border: 1px solid var(--color-bark-200, #d7dcc9); border-radius: 12px; font-family: ui-sans-serif, system-ui, sans-serif; transition: border-color 150ms, box-shadow 150ms; }\n.ds-leg:hover { border-color: var(--color-bark-300, #bcc3aa); }\n.ds-leg.is-selected { border-color: #b5714f; box-shadow: 0 0 0 3px rgba(181,113,79,0.15), 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1); }\n.ds-leg-main { flex: 1; min-width: 0; padding: 8px 4px 8px 6px; text-align: left; }\n.ds-leg-top { display: flex; align-items: center; gap: 6px; }\n.ds-leg-top > svg:first-child { color: var(--color-bark-300, #bcc3aa); flex-shrink: 0; }\n.ds-leg-mode { display: flex; width: 24px; height: 24px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 9999px; border: 1px dashed #b5714f; background: rgba(181,113,79,0.08); color: #b5714f; }\n.ds-leg-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 0.9375rem/1.45 ui-sans-serif, system-ui, sans-serif; color: var(--color-bark-900, #262a22); }\n.ds-leg-arrow { color: var(--color-bark-600, #616855); }\n.ds-leg-sub { margin: 4px 0 0 44px; font-size: 0.8125rem; color: var(--color-bark-500, #7c836c); }\n.ds-leg-meta { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 0 44px; font-size: 0.8125rem; color: var(--color-bark-600, #616855); }\n.ds-leg-cost { margin-left: auto; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--color-bark-700, #4c5243); }\n.ds-leg-edit { flex-shrink: 0; align-self: stretch; padding: 0 8px; background: transparent; border: none; border-radius: 0 12px 12px 0; color: var(--color-bark-300, #bcc3aa); cursor: pointer; transition: background 150ms, color 150ms; }\n.ds-leg-edit:hover { background: var(--color-bark-50, #f6f7f2); color: var(--color-bark-700, #4c5243); }\n.ds-leg-edit:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-moss-500, #5c8752); }\n.ds-pill { display: inline-block; flex-shrink: 0; border-radius: 9999px; padding: 2px 6px; font: 500 0.6875rem/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.02em; }\n.ds-pill-idea { border: 1px dashed var(--color-heather-300, #b6aac7); background: var(--color-heather-50, #f4f2f7); color: var(--color-heather-600, #645378); }"
+    },
+    {
+      "name": "Connector Strip",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The space between two legs, drawn as a seam of dots that swells in the middle. Never a solid line — the two legs are precisely not joined. The mode colour lives in the dots; the headline is bark-800, because the mode colours fail as text. The italic interlude is the quietest text in the app.",
+      "html": "<div class=\"ds-conn\"><div class=\"ds-conn-dots\"><span style=\"width:3px;height:3px;opacity:.3\"></span><span style=\"width:4px;height:4px;opacity:.53\"></span><span style=\"width:5px;height:5px;opacity:.75\"></span><span style=\"width:4px;height:4px;opacity:.53\"></span><span style=\"width:3px;height:3px;opacity:.3\"></span></div><div class=\"ds-conn-body\"><p class=\"ds-conn-head\">3 nights in Lisbon</p><p class=\"ds-conn-note\">Arrive Tue 08:30, leave Fri 11:15</p><p class=\"ds-conn-interlude\">Long enough to run out of pastel opinions.</p></div></div>",
+      "css": ".ds-conn { display: flex; gap: 12px; padding-left: 12px; font-family: ui-sans-serif, system-ui, sans-serif; }\n.ds-conn-dots { display: flex; width: 16px; flex-shrink: 0; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 0; }\n.ds-conn-dots span { display: block; border-radius: 9999px; background: #3f7d70; }\n.ds-conn-body { min-width: 0; flex: 1; padding: 6px 0; }\n.ds-conn-head { margin: 0; font: 500 0.8125rem/1.4 ui-sans-serif, system-ui, sans-serif; color: var(--color-bark-800, #363b30); }\n.ds-conn-note { margin: 2px 0 0; font: 500 0.75rem/1.45 ui-sans-serif, system-ui, sans-serif; color: var(--color-bark-500, #7c836c); }\n.ds-conn-interlude { margin: 2px 0 0; font: italic 400 0.75rem/1.45 ui-sans-serif, system-ui, sans-serif; color: var(--color-bark-600, #616855); }"
+    },
+    {
+      "name": "Cost Popover",
+      "kind": "custom",
+      "refersTo": "popover",
+      "description": "The only thing in the app that floats over content, and the only place a real shadow appears. Holds the per-currency breakdown behind the single converted total.",
+      "html": "<div class=\"ds-pop-wrap\"><button class=\"ds-pop-trigger\"><span><span class=\"ds-pop-eyebrow\">Trip total</span><span class=\"ds-pop-total\">CA$1,914</span></span><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></button><div class=\"ds-pop\"><p class=\"ds-pop-note\">2 travellers &#8212; per-person costs are already multiplied through.</p><table class=\"ds-pop-table\"><tr><td class=\"ds-pop-cur\">EUR</td><td class=\"ds-pop-amt\">&#8364;64</td><td class=\"ds-pop-conv\">&#8776; CA$95</td></tr><tr><td class=\"ds-pop-cur\">CAD</td><td class=\"ds-pop-amt\">CA$1,819</td><td class=\"ds-pop-conv\"></td></tr></table></div></div>",
+      "css": ".ds-pop-wrap { position: relative; display: inline-block; font-family: ui-sans-serif, system-ui, sans-serif; }\n.ds-pop-trigger { display: flex; align-items: center; gap: 8px; background: transparent; border: none; border-radius: 8px; padding: 4px 8px; text-align: right; color: var(--color-bark-800, #363b30); cursor: pointer; transition: background 150ms; }\n.ds-pop-trigger:hover { background: var(--color-bark-100, #eaeee2); }\n.ds-pop-trigger:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-moss-500, #5c8752); }\n.ds-pop-trigger > svg { color: var(--color-bark-600, #616855); }\n.ds-pop-eyebrow { display: block; font: 500 0.6875rem/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.02em; text-transform: uppercase; color: var(--color-bark-600, #616855); }\n.ds-pop-total { display: block; font: 600 1rem/1.25 ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; }\n.ds-pop { width: 320px; margin-top: 4px; background: var(--color-parchment, #fcfdf8); border: 1px solid var(--color-bark-200, #d7dcc9); border-radius: 12px; padding: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1); }\n.ds-pop-note { margin: 0 0 8px; font-size: 0.75rem; color: var(--color-bark-500, #7c836c); }\n.ds-pop-table { width: 100%; font-size: 0.8125rem; border-collapse: collapse; color: var(--color-bark-600, #616855); }\n.ds-pop-cur { padding: 4px 8px 4px 0; font-weight: 500; }\n.ds-pop-amt { padding: 4px 8px 4px 0; text-align: right; font-variant-numeric: tabular-nums; }\n.ds-pop-conv { padding: 4px 0; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-bark-900, #262a22); }"
+    },
+    {
+      "name": "Undo Bar",
+      "kind": "custom",
+      "refersTo": "undo-bar",
+      "description": "The one dark surface in the app. Appears only after an action that could lose work you did not explicitly type — a drag that rewrote a date, or a delete.",
+      "html": "<div class=\"ds-undo\" role=\"status\"><p class=\"ds-undo-text\">Moved the Lisbon flight and set its departure to 12 Sep, 14:00.</p><button class=\"ds-undo-btn\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\"/></svg>Undo</button></div>",
+      "css": ".ds-undo { display: flex; align-items: flex-start; gap: 8px; background: var(--color-moss-800, #2e422a); color: var(--color-parchment, #fcfdf8); padding: 8px 12px; font-family: ui-sans-serif, system-ui, sans-serif; }\n.ds-undo-text { margin: 0; flex: 1; min-width: 0; font-size: 0.8125rem; line-height: 1.5; }\n.ds-undo-btn { display: flex; flex-shrink: 0; align-items: center; gap: 4px; background: rgba(255,255,255,0.1); color: inherit; border: none; border-radius: 6px; padding: 4px 8px; font: 500 0.8125rem/1.4 ui-sans-serif, system-ui, sans-serif; cursor: pointer; transition: background 150ms; }\n.ds-undo-btn:hover { background: rgba(255,255,255,0.2); }\n.ds-undo-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Notebook",
+    "overview": "This is a plan being written by hand, months before anything is booked. The surface is parchment rather than white, the type is small and dense the way handwriting in a margin is dense, and most of what is on screen is provisional — dashed, faded, undated — because that is the honest state of a trip six months out. The design's central job is to make an unfinished plan look like a plan taking shape rather than a form someone failed to complete.\n\nEverything in the palette is a colour something outdoors actually is — bark, moss, ochre clay, rusted iron, heather, dry olive, slate water — desaturated until none of them shout. The scheme divides cleanly: chrome is pastel and content is not. Surfaces, borders and pills live at 50-200 so they read as paper and shade; anything carrying meaning — a transport mode, a plan status, a warning — sits at 400-600, dark enough to be told apart at a glance and to survive being drawn 3px wide over a basemap.\n\nThe map is half the screen, so the map's conventions govern the whole app rather than the other way around. A white casing under every route is the road-atlas trick that makes a thin line legible over terrain; dashed-versus-solid is a cartographic convention, not a decoration; and the basemap itself was chosen for its restraint so six muted route colours would have somewhere to sit. The itinerary list then borrows all of it, which is why someone who has looked at the map for ten seconds already knows how to read the list.\n\nThe personality is real but rationed. Exactly one line in the interface — the interlude under a connector — has a sense of humour, and it is deliberately the faintest text on screen.",
+    "keyCharacteristics": [
+      "Paper, not white. Warm sage neutrals with a parchment float above them.",
+      "Two voices: Fraunces for the trip, system sans for the tool.",
+      "Provisional by default. Dashed and faded is the resting state, not an error state.",
+      "Every fact gets exactly one channel, and channels never borrow each other's.",
+      "Compressed type scale: 11px to 20px, every role a named rem token.",
+      "Nearly flat. Depth comes from tone; shadow is a response to state.",
+      "Character lives in the smallest text, never in ornament."
+    ],
+    "rules": [
+      {
+        "name": "The Chrome-and-Content Rule",
+        "body": "Chrome is pastel; content is not. Surfaces, borders and pills come from the 50-200 range. Anything that carries meaning — a mode, a status, a warning — comes from 400-600. A border at 500 or a status colour at 100 both break the scheme.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Channels Rule",
+        "body": "Mode and status get separate palettes and never share a swatch. Status is a property of the plan, not of the journey, so it is the same three colours on every row — that is the entire reason a reader can sweep the list and count what is still unbooked.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ideas-Aren't-Grey Rule",
+        "body": "`idea` is heather, not grey. An idea is the most alive thing in the list, and greying it out made a half-sketched itinerary look like a failure state. The progression heather to ochre to moss runs cool to warm to settled.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Alarm Rule",
+        "body": "Rust is the only alarm colour, spent only on a genuinely broken itinerary or a destructive action. A soft gap is the normal shape of a trip and is drawn in ochre as an offer. Painting normal things red is how people learn to ignore the red things that matter.",
+        "section": "colors"
+      },
+      {
+        "name": "The Quietest Voice Rule",
+        "body": "Personality lives in the smallest, faintest text in its container, and never shares space with an alert. The interlude is 12px, bark-600, italic, and is suppressed entirely on a hard gap. Quiet is made from size, weight and italic; it is never made from a grey too light to read.",
+        "section": "typography"
+      },
+      {
+        "name": "The Nothing-Is-Blank Rule",
+        "body": "An empty value is written out, never left as an empty row. A leg with no date reads 'No date or operator yet'; an unreachable duration reads 'crosses time zones'. A blank looks broken; a named absence is an invitation.",
+        "section": "typography"
+      },
+      {
+        "name": "The DOM-Order Rule",
+        "body": "Visual order may be rearranged responsively, but the itinerary always precedes the map in source order. Any future reflow must preserve that.",
+        "section": "layout"
+      },
+      {
+        "name": "The Selection-Is-Colour Rule",
+        "body": "Selection is expressed as the selected item's own mode colour — a ring on the card, a halo on the map — not as a generic highlight. That is what makes a row and a line find each other across the two panes.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Dashed-Until-Booked Rule",
+        "body": "Dashed means provisional and solid means committed, in every place the distinction can be drawn: the route on the map, the status pill's border, the mode chip on a card, and the status buttons in the editor. Opacity reinforces it — 0.72 idea, 0.86 planned, 1 booked.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Seam, Not a Line",
+        "body": "The space between two legs is drawn as a run of translucent dots that swells in the middle and tapers at both ends. A solid line would say 'these are joined', and the entire point of that strip is that they are not: there is time, and sometimes a missing journey, in between.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "section": "typography",
+        "body": "Fraunces appears in exactly three places: the trip title, the itinerary's empty state, and the map's setup state. It never sets a label, a control, a value, or anything in a row that repeats."
+      },
+      {
+        "name": "The Named Role Rule",
+        "section": "typography",
+        "body": "Type is set with a role token, never a raw size. An arbitrary Tailwind size sets a font-size and lets the leading fall through from whatever parent is above it. A new size means a new role, or it means the existing role was right."
+      },
+      {
+        "name": "The Rem Rule",
+        "section": "typography",
+        "body": "Every role is expressed in rem. Mixing rem roles with px roles meant a reader who had turned their text size up got some of the interface enlarged and the smallest parts of it left where they were."
+      },
+      {
+        "name": "The Text Floor Rule",
+        "section": "colors",
+        "body": "No text is painted above bark-600. On parchment, bark-400 is 2.6:1 and bark-500 is 3.9:1 — both below the 4.5:1 this product is committed to, and bark-500 is the trap because it looks like the safe middle step. The mode colours are also below the floor as text (3.0:1-4.4:1); they colour routes, dots and chips, never a string."
+      }
+    ],
+    "dos": [
+      "Do keep chrome in the 50-200 range and meaning in 400-600. A new surface is bark; a new confirmation is moss; a new invitation is ochre.",
+      "Do give every new fact its own channel, and check it does not collide with mode, status or selection before choosing how to draw it.",
+      "Do draw provisional things dashed and committed things solid, in every medium — pill, chip, map line, editor control.",
+      "Do name an absence in words rather than leaving a row blank.",
+      "Do put focus rings on everything interactive, in moss-500 by default and in the local tone inside a coloured container.",
+      "Do give every map-driven action a keyboard and list equivalent; the itinerary list is the non-visual equivalent of the map.",
+      "Do use parchment for anything floating and bark-100 for the ground.",
+      "Do keep new type inside the 11-20px scale and set it with a named role token rather than a raw size.",
+      "Do keep text at bark-600 or darker, and check a new colour as text before using it as text."
+    ],
+    "donts": [
+      "Don't use pure white as a surface. #ffffff exists in this system for exactly one thing: the casing under a route.",
+      "Don't grey out an idea, or fade an unbooked item below 0.72 opacity. A trip made mostly of ideas is every trip worth planning, and it must not look like a failure state.",
+      "Don't let status borrow a mode colour, or a mode borrow a semantic one. Two existing collisions are documented as debts, not precedent.",
+      "Don't spend rust on anything that is not genuinely broken or genuinely destructive. A soft gap is an offer in ochre.",
+      "Don't add a resting shadow. Shadow marks selection, focus or an overlay.",
+      "Don't put personality anywhere but the quietest text in its container, and never beside a warning.",
+      "Don't drift toward the greyscale, near-black pass this palette replaced — legible and completely joyless.",
+      "Don't drift toward a saturated SaaS dashboard: bright blue primaries, hard white cards, dense chrome.",
+      "Don't borrow anything from consumer travel-booking sites — urgency banners, deal badges, countdowns, red sale accents. This is a planning tool, and nothing in it should push a decision.",
+      "Don't add gradients, blobs, mascots or illustration. Character comes from the palette, the map and one line of quiet prose.",
+      "Don't make text quiet by making it light. Quiet is size, weight and italic; bark-400 prose is not subtle, it is unreadable.",
+      "Don't set a raw pixel size (text-[11px]). It carries no line-height and no rem scaling.",
+      "Don't put Fraunces on a label, a control, a value, or anything in a repeating row."
+    ]
+  }
+}

@@ -107,12 +107,17 @@ export function LegConnector({
 
       <div className="flex min-w-0 flex-1 items-start gap-2 py-1.5">
         <div className="min-w-0 flex-1">
-          <p
-            className={`text-xs ${HEADLINE_CLASSES[tone]}`}
-            style={tone === "quiet" ? { color } : undefined}
-          >
-            {headline}
-          </p>
+          {/*
+            The quiet headline used to be painted in the arriving leg's
+            mode colour. Every one of the six fails AA as text on
+            bark-100 — they run 3.0:1 to 4.4:1, because they were drawn
+            to survive as 3px lines over a basemap, not to be read at
+            13px. The mode channel doesn't disappear: the dots to the
+            left of this line are still in that colour, and the card
+            above still carries the mode chip. It moves off the text,
+            which is the one place it couldn't afford to be.
+          */}
+          <p className={`text-label ${HEADLINE_CLASSES[tone]}`}>{headline}</p>
 
           {/* How long you're here, when the headline was busy saying
               something else. Above the interlude and never truncated:
@@ -120,21 +125,26 @@ export function LegConnector({
               on this strip and it isn't allowed to fall off the end
               of a line. */}
           {note && (
-            <p className="mt-0.5 text-[11px] font-medium text-bark-500">
+            <p className="mt-0.5 text-caption font-medium text-bark-700">
               {note}
             </p>
           )}
 
           {/* Allowed to wrap, unlike everything else in this strip:
-              it's a sentence, and a truncated joke is just litter. */}
+              it's a sentence, and a truncated joke is just litter.
+              Still the quietest thing on screen, but the quiet is now
+              carried by the italic and the size rather than by a grey
+              that only some readers could resolve — bark-400 was
+              2.6:1 on parchment, which is a joke nobody gets to
+              read. */}
           {interlude && (
-            <p className="mt-0.5 text-[11px] leading-snug text-bark-400 italic">
+            <p className="mt-0.5 text-caption text-bark-600 italic">
               {interlude}
             </p>
           )}
 
           {detail && (
-            <p className="mt-0.5 truncate text-[11px] text-bark-400">
+            <p className="mt-0.5 truncate text-caption text-bark-600">
               {detail}
             </p>
           )}
@@ -154,7 +164,7 @@ export function LegConnector({
                 departure: arriving.arrival,
               })
             }
-            className={`flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-medium transition focus:outline-none focus-visible:ring-2 ${ACTION_CLASSES[tone]}`}
+            className={`flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-caption font-medium transition focus:outline-none focus-visible:ring-2 ${ACTION_CLASSES[tone]}`}
           >
             <Plus className="size-3" aria-hidden />
             {action.label}
@@ -166,14 +176,18 @@ export function LegConnector({
 }
 
 const HEADLINE_CLASSES: Record<Tone, string> = {
-  quiet: "font-medium",
+  quiet: "font-medium text-bark-800",
   invite: "font-medium text-ochre-700",
   alert: "flex items-center gap-1 font-medium text-rust-700",
 };
 
 const ACTION_CLASSES: Record<Tone, string> = {
+  // Full-strength moss rather than the old 70%: an alpha this light
+  // over parchment lands around 3.3:1, and this is a real control
+  // with a real label, not a watermark. It still recedes — it has no
+  // border and no fill until you're on it.
   quiet:
-    "border-transparent text-moss-600/70 hover:border-moss-200 hover:bg-moss-50 hover:text-moss-700 focus-visible:ring-moss-500",
+    "border-transparent text-moss-600 hover:border-moss-200 hover:bg-moss-50 hover:text-moss-700 focus-visible:ring-moss-500",
   invite:
     "border-ochre-200 bg-ochre-50 text-ochre-700 hover:bg-ochre-100 focus-visible:ring-ochre-500",
   alert:

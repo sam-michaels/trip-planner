@@ -66,7 +66,7 @@ export function CostSummary({ trip, legs }: CostSummaryProps) {
   );
 
   if (lines.length === 0) {
-    return <p className="text-xs text-bark-400">No costs entered yet</p>;
+    return <p className="text-caption text-bark-600">No costs entered yet</p>;
   }
 
   const convertible = lines.filter((line) => line.converted !== undefined);
@@ -86,12 +86,15 @@ export function CostSummary({ trip, legs }: CostSummaryProps) {
         className="flex items-center gap-2 rounded-lg px-2 py-1 text-right transition hover:bg-bark-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
       >
         <span>
-          <span className="block text-[10px] font-medium tracking-wide text-bark-400 uppercase">
+          <span className="block text-micro text-bark-600 uppercase">
             Trip total
           </span>
-          <span className="block text-base leading-tight font-semibold tabular-nums">
+          <span className="block text-title font-semibold tabular-nums">
             {loading ? (
-              <span className="text-bark-300">Converting…</span>
+              // Was bark-300, which is 1.8:1 on parchment — a loading
+              // state nobody could read is indistinguishable from a
+              // blank one. It should recede, not vanish.
+              <span className="text-bark-500">Converting…</span>
             ) : canTotal ? (
               formatMoney({
                 amount: Math.round(total),
@@ -104,7 +107,7 @@ export function CostSummary({ trip, legs }: CostSummaryProps) {
                   amount: Math.round(total),
                   currency: trip.homeCurrency,
                 })}
-                <span className="text-xs font-normal text-bark-400">
+                <span className="text-caption font-normal text-bark-600">
                   + {missing.length} more
                 </span>
               </span>
@@ -119,16 +122,16 @@ export function CostSummary({ trip, legs }: CostSummaryProps) {
 
       {open && (
         <div className="absolute right-0 z-20 mt-1 w-80 rounded-xl border border-bark-200 bg-parchment p-3 shadow-lg">
-          <p className="mb-2 text-[11px] text-bark-500">
+          <p className="mb-2 text-caption text-bark-600">
             {trip.travellers}{" "}
             {trip.travellers === 1 ? "traveller" : "travellers"} — per-person
             costs are already multiplied through.
           </p>
 
-          <table className="w-full text-xs">
+          <table className="w-full text-label">
             <tbody>
               {lines.map((line) => (
-                <tr key={line.currency} className="text-bark-600">
+                <tr key={line.currency} className="text-bark-700">
                   <td className="py-1 pr-2 font-medium">{line.currency}</td>
                   <td className="py-1 pr-2 text-right tabular-nums">
                     {formatMoney({
@@ -151,7 +154,7 @@ export function CostSummary({ trip, legs }: CostSummaryProps) {
             </tbody>
           </table>
 
-          <div className="mt-2 border-t border-bark-200 pt-2 text-xs">
+          <div className="mt-2 border-t border-bark-200 pt-2 text-label">
             {error ? (
               <p className="text-ochre-700">
                 {error} — showing each currency separately. The per-currency
@@ -170,7 +173,7 @@ export function CostSummary({ trip, legs }: CostSummaryProps) {
                   </span>
                 </div>
                 {table?.updated && (
-                  <p className="mt-1.5 text-[11px] text-bark-400">
+                  <p className="mt-1.5 text-caption text-bark-600">
                     Rates as of {table.updated.replace(" +0000", " UTC")}.
                     Converted for display only — legs stay stored in the
                     currency you'll actually pay.

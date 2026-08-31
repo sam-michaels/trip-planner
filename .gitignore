@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code working directories.
+# `worktrees/` holds real git worktrees for agent runs — 2.3GB here, and it is
+# regenerated state, never source. `skills/` is vendored tooling rather than
+# this app's code. A shared project `settings.json` is the one thing worth
+# committing, so it stays un-ignored for when one exists; `settings.local.json`
+# is per-machine and does not.
+.claude/*
+!.claude/settings.json
+
+# Impeccable design workflow.
+# `design.json` IS tracked — it is the DESIGN.md sidecar and a real project
+# artifact. Everything else here is machine-local: a hook cache, local config
+# overrides, and the live-mode session journal.
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/live/
