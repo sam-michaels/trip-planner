@@ -26,11 +26,15 @@ dist-ssr
 # Claude Code working directories.
 # `worktrees/` holds real git worktrees for agent runs — 2.3GB here, and it is
 # regenerated state, never source. `skills/` is vendored tooling rather than
-# this app's code. A shared project `settings.json` is the one thing worth
-# committing, so it stays un-ignored for when one exists; `settings.local.json`
-# is per-machine and does not.
-.claude/*
-!.claude/settings.json
+# this app's code. `settings.json` is ignored too: plugin installers write
+# absolute machine-local paths into it (graphify's PreToolUse hooks point at
+# /Users/<name>/.local/bin/graphify), so it is per-machine, not shared config.
+.claude/
+
+# graphify knowledge graph. Derived from the source on demand — `graphify
+# update .` rebuilds the AST layer for free, and the semantic layer is cached
+# under graphify-out/cache/. Never source.
+graphify-out/
 
 # Impeccable design workflow.
 # `design.json` IS tracked — it is the DESIGN.md sidecar and a real project

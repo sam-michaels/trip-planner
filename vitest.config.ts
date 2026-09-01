@@ -1,4 +1,4 @@
-import { defineConfig, mergeConfig } from 'vitest/config'
+import { configDefaults, defineConfig, mergeConfig } from 'vitest/config'
 import viteConfig from './vite.config.ts'
 
 // Merge into vite.config.ts (via mergeConfig) rather than defining a
@@ -19,6 +19,18 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      // Agent worktrees under .claude/ are full checkouts of other
+      // branches, so their test files look exactly like ours and vitest
+      // collects them: 286 of 333 tests were coming from ten stale
+      // worktrees, running code from branches nobody is on. Worse than
+      // the noise and the 7x runtime is the failure mode — a broken test
+      // on an abandoned branch would fail the suite here, for a file
+      // that isn't in this working tree at all.
+      //
+      // Spread configDefaults.exclude rather than replacing it: setting
+      // `exclude` overrides vitest's defaults wholesale, which would
+      // quietly re-admit node_modules and dist.
+      exclude: [...configDefaults.exclude, '**/.claude/**'],
     },
   }),
 )
