@@ -214,7 +214,7 @@ export function DestinationPicker({
       <div className="rounded-xl border border-bark-200 bg-parchment focus-within:border-ochre-400 focus-within:ring-2 focus-within:ring-ochre-100">
         <label
           htmlFor={`${listId}-input`}
-          className="block px-3 pt-2 text-xs font-medium text-bark-500"
+          className="block px-3 pt-2 text-label font-medium text-bark-600"
         >
           {label}
         </label>
@@ -238,7 +238,7 @@ export function DestinationPicker({
             aria-activedescendant={
               !browsing && suggestions.length > 0 ? optionId(active) : undefined
             }
-            className="w-full bg-transparent text-sm text-bark-900 placeholder:text-bark-400 focus:outline-none"
+            className="w-full bg-transparent text-body text-bark-900 placeholder:text-bark-600 focus:outline-none"
           />
           {searching && (
             <Loader2
@@ -307,20 +307,20 @@ export function DestinationPicker({
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
-                    <span className="min-w-0 truncate text-sm text-bark-900">
+                    <span className="min-w-0 truncate text-body text-bark-900">
                       {suggestion.place.name}
                     </span>
                     {suggestion.inTrip && (
-                      <span className="shrink-0 rounded bg-bark-100 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-bark-500 uppercase">
+                      <span className="shrink-0 rounded bg-bark-100 px-1.5 py-0.5 text-micro text-bark-600 uppercase">
                         In trip
                       </span>
                     )}
                   </span>
-                  <span className="block truncate text-xs text-bark-500">
+                  <span className="block truncate text-caption text-bark-600">
                     {subtitleFor(suggestion.place)}
                   </span>
                   {suggestion.hook && (
-                    <span className="mt-0.5 block text-xs leading-relaxed text-bark-600">
+                    <span className="mt-0.5 block text-caption text-bark-600">
                       {suggestion.hook}
                     </span>
                   )}
@@ -329,7 +329,7 @@ export function DestinationPicker({
             ))}
 
             {suggestions.length === 0 && (
-              <li className="px-3 py-3 text-xs text-bark-500">
+              <li className="px-3 py-3 text-caption text-bark-600">
                 {error ? (
                   <span className="text-rust-600">{error}</span>
                 ) : searching ? (

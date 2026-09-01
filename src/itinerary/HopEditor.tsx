@@ -396,7 +396,7 @@ export function HopEditor({
           homeCurrency={homeCurrency}
         />
         {amountRejected && (
-          <p className="mt-1 text-[11px] text-rust-600">
+          <p className="mt-1 text-micro text-rust-600">
             Not saved — a fare below zero is a typo, not a refund.
           </p>
         )}
@@ -407,7 +407,7 @@ export function HopEditor({
           type="button"
           onClick={() => setShowDetails((shown) => !shown)}
           aria-expanded={showDetails}
-          className="flex items-center gap-1 text-xs font-medium text-bark-500 transition hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+          className="flex items-center gap-1 text-label font-medium text-bark-600 transition hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
         >
           <ChevronRight
             className={`size-3.5 transition-transform ${showDetails ? "rotate-90" : ""}`}
@@ -453,7 +453,7 @@ export function HopEditor({
                     would refuse the keystroke. Whoever renders this as
                     a link is still responsible for the scheme. */}
                 {bookingUrlOdd && (
-                  <p className="mt-1 text-[11px] text-ochre-700">
+                  <p className="mt-1 text-micro text-ochre-700">
                     Add https:// or this won't open as a link.
                   </p>
                 )}
@@ -485,19 +485,19 @@ export function HopEditor({
           onClick={resetEverything}
           disabled={!anyOverrides}
           {...labelled("Reset the whole hop to the route engine's proposal")}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-bark-500 transition hover:bg-rust-50 hover:text-rust-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust-500 disabled:cursor-not-allowed disabled:text-bark-300 disabled:hover:bg-transparent disabled:hover:text-bark-300"
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-label font-medium text-bark-600 transition hover:bg-rust-50 hover:text-rust-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust-500 disabled:cursor-not-allowed disabled:text-bark-300 disabled:hover:bg-transparent disabled:hover:text-bark-300"
         >
           <RotateCcw className="size-3.5" aria-hidden />
           Reset all
         </button>
         <div className="flex-1" />
-        <p className="hidden text-[11px] text-bark-400 sm:block">
+        <p className="hidden text-micro text-bark-600 sm:block">
           Saved as you type
         </p>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg bg-moss-700 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-moss-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+          className="rounded-lg bg-moss-700 px-3 py-1.5 text-body font-medium text-white transition hover:bg-moss-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
         >
           Done
         </button>
@@ -519,11 +519,11 @@ function Endpoints({ leg, occurrences }: { leg: Leg; occurrences: number }) {
       <div className="flex items-start gap-2">
         <MapPin className="mt-0.5 size-4 shrink-0 text-bark-400" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-bark-900">
+          <p className="text-body font-medium text-bark-900">
             {leg.from.name} <span className="text-bark-400">→</span>{" "}
             {leg.to.name}
           </p>
-          <p className="truncate text-xs text-bark-500">
+          <p className="truncate text-caption text-bark-600">
             {placeSubtitle(leg.from)}
             {leg.from.iata ? ` · ${leg.from.iata}` : ""} →{" "}
             {placeSubtitle(leg.to)}
@@ -532,7 +532,7 @@ function Endpoints({ leg, occurrences }: { leg: Leg; occurrences: number }) {
         </div>
       </div>
 
-      <p className="mt-1.5 text-[11px] text-bark-400">
+      <p className="mt-1.5 text-micro text-bark-600">
         Fixed by the route between your destinations — change the
         destinations to change it.
       </p>
@@ -543,7 +543,7 @@ function Endpoints({ leg, occurrences }: { leg: Leg; occurrences: number }) {
           Shown on EVERY occurrence, including the first: it is the one
           people open, and it is the one the leg id can't identify. */}
       {occurrences > 1 && (
-        <p className="mt-1 text-[11px] text-ochre-700">
+        <p className="mt-1 text-micro text-ochre-700">
           This hop happens {occurrences} times on the trip · what you set
           here applies to every one of them.
         </p>
@@ -590,7 +590,7 @@ function Provenance({
     // the engine chose it would be exactly the confusion this screen
     // exists to remove.
     if (!routeValue) return null;
-    return <span className="text-[10px] text-bark-400">From the route</span>;
+    return <span className="text-micro text-bark-600">From the route</span>;
   }
 
   const resetTitle = routeValue
@@ -601,7 +601,7 @@ function Provenance({
 
   return (
     <span className="flex items-center gap-1">
-      <span className="rounded-full border border-bark-200 bg-bark-50 px-1.5 py-px text-[10px] font-medium text-bark-600">
+      <span className="rounded-full border border-bark-200 bg-bark-50 px-1.5 py-px text-micro text-bark-600">
         Yours
       </span>
       <button

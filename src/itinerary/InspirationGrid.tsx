@@ -113,7 +113,7 @@ export function InspirationGrid({
   return (
     <div className="@container">
       {caption !== null && (
-        <p className="mb-2 text-xs text-bark-500">
+        <p className="mb-2 text-caption text-bark-600">
           {caption ?? (
             <>
               {POPULAR_DESTINATIONS.length} places, and a reason for each.
@@ -145,7 +145,7 @@ export function InspirationGrid({
       </div>
 
       {shown.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-bark-200 bg-bark-50 px-3 py-4 text-xs text-bark-500">
+        <p className="rounded-lg border border-dashed border-bark-200 bg-bark-50 px-3 py-4 text-caption text-bark-600">
           Nothing here matches that. {POPULAR_DESTINATIONS.length} places is a
           shortlist, not an atlas.
         </p>
@@ -153,10 +153,10 @@ export function InspirationGrid({
         sections.map((section) => (
           <section key={section.region ?? "all"} className="mb-4 last:mb-0">
             {section.region && (
-              <h3 className="mb-1.5 flex items-baseline gap-2 text-[11px] font-medium tracking-wide text-bark-500 uppercase">
+              <h3 className="mb-1.5 flex items-baseline gap-2 text-micro text-bark-600 uppercase">
                 <span>{REGION_LABELS[section.region]}</span>
                 <span className="h-px flex-1 bg-bark-200" aria-hidden />
-                <span className="text-bark-400">{section.items.length}</span>
+                <span className="text-bark-600">{section.items.length}</span>
               </h3>
             )}
 
@@ -208,7 +208,7 @@ function DestinationCard({
       className="group flex h-full w-full flex-col gap-1 rounded-xl border border-bark-200 bg-parchment p-3 text-left transition hover:border-ochre-300 hover:bg-ochre-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
     >
       <span className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-bark-900">
+        <span className="min-w-0 flex-1 truncate text-body font-medium text-bark-900">
           {place.name}
         </span>
         {inTrip ? (
@@ -229,12 +229,12 @@ function DestinationCard({
         already said "Europe", and a card that repeats its own
         section is two words of noise on every row.
       */}
-      <span className="truncate text-[11px] tracking-wide text-bark-500 uppercase">
+      <span className="truncate text-micro text-bark-600 uppercase">
         {countryName(place.country)}
         {inTrip ? " · In trip" : ""}
       </span>
 
-      <span className="text-xs leading-relaxed text-bark-600">{hook}</span>
+      <span className="text-caption text-bark-600">{hook}</span>
     </button>
   );
 }
@@ -258,14 +258,14 @@ function RegionChip({ label, count, selected, onClick }: RegionChipProps) {
       // though — disabling it would trap you inside an empty region
       // with no way back to "Everywhere".
       disabled={count === 0 && !selected}
-      className={`rounded-full border px-2.5 py-1 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`rounded-full border px-2.5 py-1 text-label transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 disabled:cursor-not-allowed disabled:opacity-40 ${
         selected
           ? "border-moss-300 bg-moss-100 text-moss-700"
           : "border-bark-200 bg-parchment text-bark-600 hover:border-bark-300 hover:bg-bark-50"
       }`}
     >
       {label}
-      <span className={selected ? "text-moss-600" : "text-bark-400"}>
+      <span className={selected ? "text-moss-600" : "text-bark-600"}>
         {" "}
         {count}
       </span>

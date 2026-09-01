@@ -102,10 +102,8 @@ export function ItineraryPanel({
   return (
     <div className="flex h-full flex-col bg-bark-100">
       <div className="flex items-center justify-between border-b border-bark-200 bg-parchment px-3 py-2">
-        <h2 className="text-xs font-semibold tracking-wide text-bark-500 uppercase">
-          Itinerary
-        </h2>
-        <span className="text-xs text-bark-400">
+        <h2 className="text-micro text-bark-600 uppercase">Itinerary</h2>
+        <span className="text-caption text-bark-600">
           {trip.destinations.length}{" "}
           {trip.destinations.length === 1 ? "destination" : "destinations"}
         </span>
@@ -118,10 +116,13 @@ export function ItineraryPanel({
       >
         {trip.destinations.length === 0 && !editor && (
           <div className="rounded-xl border border-dashed border-bark-300 px-4 py-8 text-center">
-            <p className="text-sm font-medium text-bark-700">
+            {/* One of the Two Voices Rule's three sanctioned uses of
+                Fraunces: the itinerary has nothing to show but its own
+                voice, same as the trip title and the map's setup state. */}
+            <p className="text-display font-display text-bark-800">
               No destinations yet
             </p>
-            <p className="mt-1 text-xs text-bark-500">
+            <p className="mt-1 text-caption text-bark-600">
               Add the first place you want to go — it can be a rough idea
               with no dates or nights.
             </p>
@@ -222,7 +223,7 @@ export function ItineraryPanel({
             <button
               type="button"
               onClick={() => setEditor(undefined)}
-              className="mt-2 text-xs font-medium text-bark-500 underline decoration-dotted underline-offset-2 transition hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+              className="mt-2 text-label font-medium text-bark-600 underline decoration-dotted underline-offset-2 transition hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
             >
               Cancel
             </button>
@@ -231,7 +232,7 @@ export function ItineraryPanel({
           <button
             type="button"
             onClick={() => setEditor({ kind: "add" })}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-bark-300 px-3 py-2.5 text-sm font-medium text-bark-500 transition hover:border-bark-400 hover:bg-parchment hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-bark-300 px-3 py-2.5 text-body font-medium text-bark-600 transition hover:border-bark-400 hover:bg-parchment hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
           >
             <Plus className="size-4" aria-hidden />
             Add destination
@@ -244,11 +245,11 @@ export function ItineraryPanel({
           role="status"
           className="flex items-start gap-2 border-t border-bark-200 bg-moss-800 px-3 py-2 text-parchment"
         >
-          <p className="min-w-0 flex-1 text-xs leading-relaxed">{undo.note}</p>
+          <p className="min-w-0 flex-1 text-caption">{undo.note}</p>
           <button
             type="button"
             onClick={() => dispatch({ type: "undo" })}
-            className="flex shrink-0 items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-xs font-medium transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex shrink-0 items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-caption font-medium transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <Undo2 className="size-3.5" aria-hidden />
             Undo
@@ -391,10 +392,10 @@ function DestinationCard({
     return (
       <div className="space-y-4 rounded-xl border border-moss-200 bg-moss-50/40 p-3">
         <div className="rounded-lg border border-bark-200 bg-parchment px-3 py-2">
-          <p className="text-sm font-medium text-bark-900">
+          <p className="text-body font-medium text-bark-900">
             {destination.place.name}
           </p>
-          <p className="text-xs text-bark-500">
+          <p className="text-caption text-bark-600">
             {placeSubtitle(destination.place)}
           </p>
         </div>
@@ -452,13 +453,13 @@ function DestinationCard({
             <Trash2 className="size-4" aria-hidden />
           </button>
           <div className="flex-1" />
-          <p className="hidden text-[11px] text-bark-400 sm:block">
+          <p className="hidden text-micro text-bark-600 sm:block">
             Saved as you type
           </p>
           <button
             type="button"
             onClick={onToggleEdit}
-            className="rounded-lg bg-moss-700 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-moss-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+            className="rounded-lg bg-moss-700 px-3 py-1.5 text-body font-medium text-white transition hover:bg-moss-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
           >
             Done
           </button>
@@ -499,22 +500,22 @@ function DestinationCard({
             className="size-3.5 shrink-0 text-bark-300 group-hover:text-bark-400"
             aria-hidden
           />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-bark-900">
+          <span className="min-w-0 flex-1 truncate text-body font-medium text-bark-900">
             {destination.place.city}
           </span>
           <span
-            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_PILL_CLASSES[destination.status]}`}
+            className={`shrink-0 rounded-full px-1.5 py-0.5 text-micro ${STATUS_PILL_CLASSES[destination.status]}`}
           >
             {STATUS_LABELS[destination.status]}
           </span>
         </div>
 
-        <p className="mt-1 ml-5 truncate text-xs text-bark-500">
+        <p className="mt-1 ml-5 truncate text-caption text-bark-600">
           {placeSubtitle(destination.place)}
         </p>
 
         <div className="mt-0.5 ml-5 flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-xs text-bark-400">
+          <span className="min-w-0 flex-1 truncate text-caption text-bark-600">
             {meta}
           </span>
           {destination.notes && (

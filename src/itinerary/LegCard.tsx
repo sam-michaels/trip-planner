@@ -199,7 +199,7 @@ export function LegCard({
           {/* A transfer within one city would otherwise read
               "Lisbon → Lisbon", which says nothing. Naming the two
               stations is the only informative version of that row. */}
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-bark-900">
+          <span className="min-w-0 flex-1 truncate text-body font-medium text-bark-900">
             {withinOneCity ? leg.from.name : leg.from.city}{" "}
             <span className="text-bark-400">→</span>{" "}
             {withinOneCity ? leg.to.name : leg.to.city}
@@ -210,14 +210,14 @@ export function LegCard({
               "how much of this is still an idea?" answerable by
               sweeping the list rather than reading it. */}
           <span
-            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_PILL_CLASSES[leg.status]}`}
+            className={`shrink-0 rounded-full px-1.5 py-0.5 text-micro ${STATUS_PILL_CLASSES[leg.status]}`}
           >
             {STATUS_LABELS[leg.status]}
           </span>
         </div>
 
         <p
-          className={`mt-1 truncate text-xs text-bark-500 ${reorderable ? "ml-11" : "ml-6"}`}
+          className={`mt-1 truncate text-caption text-bark-600 ${reorderable ? "ml-11" : "ml-6"}`}
         >
           {withinOneCity
             ? `Across ${leg.from.city}`
@@ -227,7 +227,7 @@ export function LegCard({
         <div
           className={`mt-0.5 flex items-baseline gap-2 ${reorderable ? "ml-11" : "ml-6"}`}
         >
-          <span className="min-w-0 flex-1 truncate text-xs text-bark-400">
+          <span className="min-w-0 flex-1 truncate text-caption text-bark-600">
             {meta ||
               (derived && !overrideNote
                 ? "From the route — nothing set yet"
@@ -237,7 +237,7 @@ export function LegCard({
           {overrideNote && (
             <span
               title={overrideNote}
-              className="shrink-0 rounded-full border border-bark-200 bg-bark-50 px-1.5 py-px text-[10px] font-medium text-bark-600"
+              className="shrink-0 rounded-full border border-bark-200 bg-bark-50 px-1.5 py-px text-micro text-bark-600"
             >
               <span aria-hidden>Yours</span>
               <span className="sr-only">{overrideNote}</span>
@@ -252,7 +252,7 @@ export function LegCard({
           )}
 
           {leg.cost && (
-            <span className="shrink-0 text-xs font-medium text-bark-700 tabular-nums">
+            <span className="shrink-0 text-caption font-medium text-bark-700 tabular-nums">
               {formatMoney(leg.cost)}
             </span>
           )}

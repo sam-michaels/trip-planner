@@ -42,8 +42,13 @@ import {
  * can't reliably override it — which is how the currency select ends
  * up eating the amount input. Width is stated at each use instead.
  */
+// `text-body` per the input-text component spec ("the working size — form
+// fields..."). Placeholder is `bark-600`, not the `bark-400` the component
+// prose used to suggest: the Text Floor Rule is explicit that placeholder
+// text is still text someone has to read to know what a field wants, and
+// bark-400 measures 2.6:1 on parchment — nowhere near the 4.5:1 floor.
 export const inputClasses =
-  "rounded-lg border border-bark-200 bg-parchment px-2.5 py-1.5 text-sm text-bark-900 placeholder:text-bark-400 focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100";
+  "rounded-lg border border-bark-200 bg-parchment px-2.5 py-1.5 text-body text-bark-900 placeholder:text-bark-600 focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100";
 
 /**
  * An icon button's name, said once.
@@ -77,7 +82,7 @@ export function Field({ label, action, children }: FieldProps) {
   return (
     <div>
       <div className="mb-1 flex min-h-4 items-center justify-between gap-2">
-        <span className="text-xs font-medium text-bark-500">{label}</span>
+        <span className="text-label font-medium text-bark-600">{label}</span>
         {action}
       </div>
       <label className="block">
@@ -99,7 +104,7 @@ export function FieldGroup({ label, action, children }: FieldProps) {
   return (
     <div>
       <div className="mb-1 flex min-h-4 items-center justify-between gap-2">
-        <span className="text-xs font-medium text-bark-500">{label}</span>
+        <span className="text-label font-medium text-bark-600">{label}</span>
         {action}
       </div>
       <div role="group" aria-label={label}>
@@ -149,7 +154,7 @@ export function ModePicker({ value, options, onChange }: ModePickerProps) {
               className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 ${
                 selected
                   ? "bg-parchment shadow-sm"
-                  : "border-transparent text-bark-500 hover:bg-parchment/70"
+                  : "border-transparent text-bark-600 hover:bg-parchment/70"
               }`}
               // Picking a mode previews the colour the route will be
               // drawn in, so the editor doubles as the map's legend.
@@ -164,9 +169,7 @@ export function ModePicker({ value, options, onChange }: ModePickerProps) {
               }
             >
               <Icon className="size-4" aria-hidden />
-              <span className="text-[10px] leading-none font-medium">
-                {MODE_LABELS[mode]}
-              </span>
+              <span className="text-micro">{MODE_LABELS[mode]}</span>
             </button>
           );
         })}
@@ -178,7 +181,7 @@ export function ModePicker({ value, options, onChange }: ModePickerProps) {
         broken; a sentence explains that it isn't.
       */}
       {options.unlikely.length > 0 && (
-        <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-bark-400">
+        <p className="mt-1.5 flex items-center gap-1.5 text-micro text-bark-600">
           {options.likely.length === 1 && !showAll && (
             <span>
               No land route — this hop has to be a{" "}
@@ -212,10 +215,10 @@ export function StatusPicker({ value, onChange }: StatusPickerProps) {
           type="button"
           onClick={() => onChange(status)}
           aria-pressed={value === status}
-          className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 ${
+          className={`rounded-lg border px-2 py-1.5 text-label font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500 ${
             value === status
               ? "shadow-sm"
-              : "border-transparent text-bark-500 hover:bg-parchment/70"
+              : "border-transparent text-bark-600 hover:bg-parchment/70"
           }`}
           // Same trick as the mode row: picking a status previews the
           // colour that status is drawn in everywhere else, so the
@@ -320,7 +323,7 @@ export function MoneyInput({
       </div>
 
       {converted !== undefined && (
-        <p className="mt-1 text-[11px] text-bark-500">
+        <p className="mt-1 text-micro text-bark-600">
           ≈{" "}
           <span className="font-medium tabular-nums">
             {formatMoney({
