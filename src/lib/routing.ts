@@ -38,8 +38,13 @@ import type {
 } from "../model/trip";
 import { hopId } from "../model/trip";
 import { defaultMode, plausibleModes } from "../itinerary/plausibleModes";
-import { distanceKm } from "./geo";
-import { isHub, nearestHubs } from "./hubs";
+import { distanceKm, isLandConnected } from "./geo";
+import { hubByIata, isHub, nearestHubs } from "./hubs";
+import {
+  airportsFlyingTo,
+  flightExists,
+  isKnownAirport,
+} from "./flightRoutes";
 import { nearestAirports } from "./placesApi";
 
 // ---------- What the engine hands back ----------
@@ -214,6 +219,23 @@ const CANDIDATES_PER_END = 2;
 const GROUND_OPTIONS = 2;
 
 /**
+ * How many gateways to offer when nothing local flies to the destination.
+ *
+ * Three, because the choice is real (Toronto or Montreal, Paris or
+ * Frankfurt) but stops being a choice past that — a fourth is another
+ * hub the traveller has to rule out by hand.
+ */
+const GATEWAY_CANDIDATES = 3;
+
+/** Rough door-to-door speeds, for the "how long is this transfer" estimate. */
+const MODE_KMH: Partial<Record<TransportMode, number>> = {
+  car: 85,
+  bus: 65,
+  train: 95,
+  flight: 550,
+};
+
+/**
  * Written out here rather than imported from `itinerary/labels.ts`
  * because that module pulls in Lucide's React icon set, and a routing
  * engine has no business dragging icons into everything that imports
@@ -332,23 +354,110 @@ async function airOptions(
     airportsNear(to, radiusKm, preferCurated, find),
   ]);
 
-  // Vary one end at a time from the best pairing. The full cross
-  // product would offer four near-identical routes and bury the one
-  // that matters; what a traveller actually wants to compare is "the
-  // same flight out of the other airport".
-  const pairings: [Place, Place][] = [];
-  for (const [origin, destination] of [
-    [origins[0], destinations[0]],
-    [origins[1], destinations[0]],
-    [origins[0], destinations[1]],
-  ]) {
-    // A pairing that flies an airport to itself isn't a flight — it
-    // happens when two destinations share their nearest hub.
-    if (!origin || !destination || origin.id === destination.id) continue;
-    pairings.push([origin, destination]);
+  // Nowhere to land is the end of it. Nowhere to take off from is not:
+  // that is exactly when a gateway is the answer.
+  if (destinations.length === 0) return [];
+
+  const direct = directPairings(from, to, origins, destinations);
+  if (direct.length > 0) {
+    return direct.map(([origin, destination]) =>
+      airChain(from, to, origin, destination),
+    );
   }
 
-  return pairings.map(([origin, destination]) => ({
+  return gatewayOptions(from, to, origins, destinations);
+}
+
+// ---------- Does a flight actually exist? ----------
+
+/**
+ * `true`, `false`, or — the one that matters — `undefined`.
+ *
+ * WHY THREE ANSWERS AND NOT TWO. The snapshot behind `flightExists` is
+ * from 2014, so a `false` means one of two unrelated things: the airport
+ * is well covered and genuinely has no such route (Lyon appears in 275
+ * routes, and none of them reach Toronto), or the snapshot has never
+ * heard of the airport at all (Berlin Brandenburg appears in zero,
+ * because it opened six years later). Treating the second as a `no`
+ * would have this engine reject a working airport on the strength of
+ * data that predates it.
+ *
+ * So `undefined` means "not our call", and every caller below reads it
+ * as permission to fall back to the geography heuristic, which at least
+ * knows the airport exists.
+ */
+function servesDirect(origin: Place, destination: Place): boolean | undefined {
+  if (!origin.iata || !destination.iata) return undefined;
+  if (!isKnownAirport(origin.iata) || !isKnownAirport(destination.iata)) {
+    return undefined;
+  }
+  return flightExists(origin.iata, destination.iata);
+}
+
+/**
+ * THE WHOLE FIX, IN ONE PREDICATE: connectivity filters, distance only
+ * ranks what survives.
+ *
+ * The engine used to choose airports by proximity and hub status alone,
+ * which answers "what is the nearest big airport" and then presents it
+ * as "what airport can get me there". Those come apart constantly —
+ * Lyon has an airport twenty kilometres away and you still fly to
+ * Toronto out of Paris. An airport the data rules out is no longer a
+ * candidate at all, however near it is and whether or not it is curated.
+ */
+function notRuledOut(origin: Place, destination: Place): boolean {
+  return servesDirect(origin, destination) !== false;
+}
+
+/** Ground distance from the traveller to an airport, and back down at the far end. */
+function transferCost(from: Place, to: Place, origin: Place, destination: Place) {
+  return (
+    distanceKm(from.coords, origin.coords) +
+    distanceKm(destination.coords, to.coords)
+  );
+}
+
+/**
+ * Airport pairs with real service between them, least travelling first.
+ *
+ * The full cross product is deliberately not offered — what a traveller
+ * wants to compare is the same flight out of the other airport, not four
+ * near-identical chains — so this keeps the cheapest few and lets
+ * `proposeRoutes` order them against the ground alternatives.
+ */
+function directPairings(
+  from: Place,
+  to: Place,
+  origins: Place[],
+  destinations: Place[],
+): [Place, Place][] {
+  const pairs: [Place, Place][] = [];
+
+  for (const origin of origins) {
+    for (const destination of destinations) {
+      // Two destinations sharing a nearest hub is not a flight.
+      if (origin.id === destination.id) continue;
+      if (!notRuledOut(origin, destination)) continue;
+      pairs.push([origin, destination]);
+    }
+  }
+
+  return pairs
+    .sort(
+      (a, b) =>
+        transferCost(from, to, a[0], a[1]) - transferCost(from, to, b[0], b[1]),
+    )
+    .slice(0, CANDIDATES_PER_END + 1);
+}
+
+/** city → airport → airport → city. */
+function airChain(
+  from: Place,
+  to: Place,
+  origin: Place,
+  destination: Place,
+): RouteOption {
+  return {
     id: `air-${code(origin)}-${code(destination)}`.toLowerCase(),
     label: `Fly ${airportLabel(origin)} → ${airportLabel(destination)}`,
     hops: chain([
@@ -356,7 +465,192 @@ async function airOptions(
       { from: origin, to: destination, mode: "flight" },
       { from: destination, to, mode: defaultMode(destination, to) },
     ]),
-  }));
+  };
+}
+
+// ---------- The gateway search ----------
+
+interface Gateway {
+  hub: Place;
+  /** The airport at the far end that this gateway actually reaches. */
+  arrival: Place;
+  km: number;
+  /** 1 = reachable overland, 2 = reachable only by flying to it. */
+  tier: 1 | 2;
+  /** For tier 2: the local airport the access flight leaves from. */
+  via?: Place;
+}
+
+/**
+ * "You cannot get there from here — so where do you have to get to first?"
+ *
+ * This is the question the engine could not previously ask. Nothing near
+ * London, Ontario flies to Lisbon; plenty of places do, and one of them
+ * is a two-hour bus away. Working that out means going at the problem
+ * backwards — start from everything that lands where you are going, then
+ * ask which of those you can reach — which is why `airportsFlyingTo`
+ * exists and why no amount of geography substitutes for it.
+ *
+ * ONLY CURATED HUBS ARE CONSIDERED. Lisbon alone has 97 airports flying
+ * into it, and resolving each to coordinates would be 97 lookups against
+ * a ten-megabyte CSV to answer one question. The hand-written table is
+ * already the set of airports worth connecting through, and it comes
+ * with coordinates attached.
+ *
+ * DEPTH IS ONE, DELIBERATELY. The engine never looks for a gateway to a
+ * gateway: a pair it cannot reach in one step is honestly unknown, and
+ * there is no real trip whose answer is "a bus to a different bus to a
+ * third airport".
+ */
+function gatewayOptions(
+  from: Place,
+  to: Place,
+  origins: Place[],
+  destinations: Place[],
+): RouteOption[] {
+  const candidates: Gateway[] = [];
+  const seen = new Set<string>();
+
+  for (const destination of destinations) {
+    if (!destination.iata || !isKnownAirport(destination.iata)) continue;
+
+    for (const iata of airportsFlyingTo(destination.iata)) {
+      const hub = hubByIata(iata);
+      if (!hub) continue;
+
+      const key = `${hub.id}->${destination.id}`;
+      if (seen.has(key) || hub.id === destination.id) continue;
+      seen.add(key);
+
+      const km = distanceKm(from.coords, hub.coords);
+
+      // Tier 1: you can simply travel there. Same overland rules the
+      // transfer to your own airport already follows — including the
+      // short leash on crossing a border, because `isLandConnected`
+      // works on continents and cannot see a strait.
+      const overland =
+        km <= MAX_TRANSFER_KM &&
+        isLandConnected(from.country, hub.country) &&
+        (hub.country === from.country || km <= MAX_CROSS_BORDER_TRANSFER_KM);
+
+      // Tier 2: too far to drive, but your own airport flies there.
+      // This is the London → Toronto case when the bus is not wanted.
+      const via = overland
+        ? undefined
+        : origins.find(
+            (origin) =>
+              origin.id !== hub.id && servesDirect(origin, hub) === true,
+          );
+
+      if (!overland && !via) continue;
+
+      candidates.push({
+        hub,
+        arrival: destination,
+        km,
+        tier: overland ? 1 : 2,
+        via,
+      });
+    }
+  }
+
+  return candidates
+    .sort((a, b) => a.tier - b.tier || a.km - b.km)
+    .slice(0, GATEWAY_CANDIDATES)
+    .map((candidate) => gatewayChain(from, to, candidate));
+}
+
+/**
+ * The chain through a gateway. Four hops when the gateway itself has to
+ * be flown to, which is a real shape and not a bug: London → YXU → YYZ
+ * → LIS → Lisbon is one way people genuinely make that trip.
+ */
+function gatewayChain(from: Place, to: Place, gateway: Gateway): RouteOption {
+  const { hub, arrival, via } = gateway;
+
+  const access: RouteHop[] = via
+    ? [
+        { from, to: via, mode: defaultMode(from, via) },
+        { from: via, to: hub, mode: "flight" },
+      ]
+    : [{ from, to: hub, mode: defaultMode(from, hub) }];
+
+  return {
+    id: `gateway-${code(hub)}-${code(arrival)}`.toLowerCase(),
+    label: `Fly ${airportLabel(hub)} → ${airportLabel(arrival)}, via ${hub.city}`,
+    hops: chain([
+      ...access,
+      { from: hub, to: arrival, mode: "flight" },
+      { from: arrival, to, mode: defaultMode(arrival, to) },
+    ]),
+  };
+}
+
+// ---------- How you reach the gateway ----------
+
+/**
+ * Every way of getting to a gateway, for the traveller to choose between.
+ *
+ * The engine picks one for its own proposal; this is the same question
+ * asked so a picker can offer all the answers. Deliberately no prices:
+ * no free service quotes a bus fare, and an invented number is worse
+ * than a blank the user can fill in from the booking site.
+ */
+export interface AccessOption {
+  mode: TransportMode;
+  /** One hop overland; two when it is a flight out of a local airport. */
+  hops: RouteHop[];
+  estimateMinutes?: number;
+}
+
+export function accessOptions(
+  from: Place,
+  gateway: Place,
+  localAirports: readonly Place[] = [],
+): AccessOption[] {
+  const km = distanceKm(from.coords, gateway.coords);
+  const options: AccessOption[] = [];
+
+  for (const mode of plausibleModes(from, gateway).likely) {
+    if (mode === "flight") continue;
+    options.push({
+      mode,
+      hops: [{ from, to: gateway, mode }],
+      estimateMinutes: estimateMinutes(km, mode),
+    });
+  }
+
+  // Flying to the gateway is only on the table if something near home
+  // actually flies there — the question this engine exists to ask.
+  const via = localAirports.find(
+    (airport) => airport.id !== gateway.id && servesDirect(airport, gateway) === true,
+  );
+  if (via) {
+    options.push({
+      mode: "flight",
+      hops: [
+        { from, to: via, mode: defaultMode(from, via) },
+        { from: via, to: gateway, mode: "flight" },
+      ],
+      estimateMinutes: estimateMinutes(
+        distanceKm(via.coords, gateway.coords),
+        "flight",
+      ),
+    });
+  }
+
+  return options;
+}
+
+/**
+ * Door to door, roughly. Rounded to five minutes because the honest
+ * precision here is "about two hours", and a bare 137 claims a
+ * timetable this engine has never seen.
+ */
+function estimateMinutes(km: number, mode: TransportMode): number | undefined {
+  const kmh = MODE_KMH[mode];
+  if (!kmh) return undefined;
+  return Math.max(5, Math.round((km / kmh) * 12)) * 5;
 }
 
 /**
@@ -426,12 +720,24 @@ async function airportsNear(
 /**
  * Pick the two airports worth putting in front of a traveller.
  *
- * SLOT ONE is the recommendation. On a long haul or a sea crossing
- * that is the curated hub even when something is closer, because
- * "closer" and "has a flight to another continent" are different
- * questions and only the hand-written table answers the second —
- * Valencia has an airport twelve kilometres away and you still fly to
- * New York out of Barcelona. Otherwise the nearest wins.
+ * THIS IS NO LONGER THE RECOMMENDATION — it is the SHORTLIST. Once
+ * `directPairings` could ask whether a flight exists, the actual choice
+ * moved there, and this function's job narrowed to deciding which two
+ * airports per end are worth asking about at all.
+ *
+ * SLOT ONE still favours the curated hub on a long haul or a sea
+ * crossing, and the reason survives the narrowing intact: the shortlist
+ * is only two long, so an end whose two nearest airports both turn out
+ * to fly nowhere useful has nothing left to offer. Reserving a slot for
+ * a hub keeps a plausible long-haul candidate in the running to be
+ * tested. Dropping this promotion fails three tests, which is the
+ * honest reason it is still here — the earlier guess that connectivity
+ * data would make it redundant was wrong.
+ *
+ * (Its old justification — that "closer" and "flies to another
+ * continent" are different questions and only the hand-written table
+ * answers the second — is now answered properly by `flightExists`.
+ * Valencia loses to Barcelona on evidence rather than on curation.)
  *
  * SLOT TWO is reserved for the nearest airport that isn't slot one, so
  * long as it's a genuine choice rather than an airport in the next

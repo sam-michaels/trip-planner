@@ -58,6 +58,7 @@ const SEVILLE = place("seville", "Seville", "ES", -5.9845, 37.3891);
 const GRANADA = place("granada", "Granada", "ES", -3.5986, 37.1773);
 const MARRAKESH = place("marrakesh", "Marrakesh", "MA", -8.0083, 31.6295);
 const TORONTO = place("toronto", "Toronto", "CA", -79.3832, 43.6532);
+const NEW_YORK = place("new-york", "New York", "US", -74.006, 40.7128);
 const MADRID = place("madrid", "Madrid", "ES", -3.7038, 40.4168);
 const BERLIN = place("berlin", "Berlin", "DE", 13.405, 52.52);
 // Deliberately somewhere the curated table doesn't reach: the nearest
@@ -264,11 +265,10 @@ describe("proposeRoutes — choosing between ground and air", () => {
     expect(idsOf(options)).toContain("ground-train");
   });
 
-  it("offers the traveller's own airport alongside the curated hub", async () => {
-    // Birmingham is 150km from Heathrow and 10km from BHX, which flies
-    // to Toronto direct. A shortcut that skipped the airport lookup
-    // whenever any hub was within 250km meant BHX was never looked up
-    // at all.
+  it("offers the local airport when it genuinely serves the route", async () => {
+    // Birmingham is 150km from Heathrow and 10km from BHX. Both fly to
+    // Newark, so both are real answers and the nearer one wins: this is
+    // "connectivity filters, distance ranks what survives" in one case.
     const bhx = airport(
       "BHX",
       "Birmingham Airport",
@@ -277,22 +277,43 @@ describe("proposeRoutes — choosing between ground and air", () => {
       -1.748,
       52.4539,
     );
-    const options = await proposeRoutes(
-      place("bham", "Birmingham", "GB", -1.8904, 52.4862),
-      TORONTO,
-      datasetOf([bhx]),
-    );
+    const bham = place("bham", "Birmingham", "GB", -1.8904, 52.4862);
 
-    // The hub still leads — that is what the curated table is for on a
-    // transatlantic hop — but the local airport is a real alternative,
-    // not something fetched and thrown away.
-    expect(options[0].hops[1].from.iata).toBe("LHR");
-    expect(options[1].hops[1].from.iata).toBe("BHX");
+    const options = await proposeRoutes(bham, NEW_YORK, datasetOf([bhx]));
+
+    expect(options[0].hops[1].from.iata).toBe("BHX");
+    expect(options.map((o) => o.hops[1]?.from.iata)).toContain("LHR");
   });
 
-  it("takes the local airport over a hub in the next country", async () => {
+  it("drops the local airport when no such flight exists", async () => {
+    // The other half of the same rule, and the reason it is a rule. BHX
+    // has 133 departures in the dataset and Toronto is not among them,
+    // while Heathrow flies there daily. Proximity would offer BHX — it
+    // is fifteen times closer — and proximity would be proposing a
+    // flight nobody sells.
+    const bhx = airport(
+      "BHX",
+      "Birmingham Airport",
+      "Birmingham",
+      "GB",
+      -1.748,
+      52.4539,
+    );
+    const bham = place("bham", "Birmingham", "GB", -1.8904, 52.4862);
+
+    const options = await proposeRoutes(bham, TORONTO, datasetOf([bhx]));
+
+    expect(options[0].hops[1].from.iata).toBe("LHR");
+    expect(options.map((o) => o.hops[1]?.from.iata)).not.toContain("BHX");
+  });
+
+  it("reaches past the local airport to a hub that flies the route", async () => {
     // Lyon's nearest curated hubs are Milan (303km) and Zurich (341km),
-    // both across a border. LYS is 20km away.
+    // both across a border; LYS is 20km away. The engine used to take
+    // LYS on those grounds and propose a Lyon → Toronto flight, which
+    // does not exist and never has — you go via Paris, and so does this
+    // now. LYS is in the dataset with 275 routes, so its silence about
+    // Toronto is an answer rather than missing data.
     const lys = airport(
       "LYS",
       "Lyon Saint-Exupéry Airport",
@@ -307,7 +328,20 @@ describe("proposeRoutes — choosing between ground and air", () => {
       datasetOf([lys]),
     );
 
-    expect(options[0].hops[1].from.iata).toBe("LYS");
+    expect(options[0].hops.at(-2)!.from.iata).toBe("CDG");
+
+    // LYS may still appear — flying Lyon → Frankfurt → Toronto is a real
+    // itinerary, and the gateway search offers it. What must never appear
+    // is the transatlantic hop the old engine invented.
+    for (const option of options) {
+      for (const hop of option.hops) {
+        expect(`${hop.from.iata}->${hop.to.iata}`, option.id).not.toBe(
+          "LYS->YYZ",
+        );
+      }
+    }
+
+    // Still nobody's idea of a trip through another country.
     for (const option of options) {
       expect(option.hops[0].to.country, option.id).toBe("FR");
     }
@@ -330,7 +364,10 @@ describe("proposeRoutes — choosing between ground and air", () => {
     const options = await proposeRoutes(GRANADA, MARRAKESH, datasetOf([agp]));
 
     expect(modesOf(options[0].hops)).toEqual(["train", "flight", "train"]);
-    expect(options.map((o) => o.hops[1]?.from.iata)).toContain("AGP");
+    // Málaga is nearest and has no Marrakesh service; Seville does.
+    // The old engine picked on distance and proposed the Málaga flight.
+    expect(options.map((o) => o.hops[1]?.from.iata)).toContain("SVQ");
+    expect(options.map((o) => o.hops[1]?.from.iata)).not.toContain("AGP");
     // The ferry is still offered — it is a real way to make the
     // crossing — just not the recommendation.
     expect(idsOf(options).at(-1)).toBe("ground-ferry");
