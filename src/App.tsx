@@ -17,11 +17,12 @@ import { ItineraryPanel } from "./itinerary/ItineraryPanel";
 import { tripReducer } from "./itinerary/tripReducer";
 import { TripMap } from "./map/TripMap";
 import { defaultMode } from "./itinerary/plausibleModes";
-import type { RouteMap, Trip } from "./model/trip";
-import { deriveLegs, emptyTrip, tripPlaces } from "./model/trip";
+import type { HopId, RouteMap, Trip } from "./model/trip";
+import { deriveLegs, emptyTrip, hopId, tripPlaces } from "./model/trip";
 import { Welcome } from "./onboarding/Welcome";
 import { newId } from "./itinerary/tripReducer";
-import { buildRouteMap } from "./lib/routing";
+import type { RouteOption, RouteOptionMap } from "./lib/routing";
+import { pickRoutes, proposeTripRoutes } from "./lib/routing";
 
 /**
  * What the itinerary looks like before the engine has answered.
@@ -35,8 +36,18 @@ import { buildRouteMap } from "./lib/routing";
  */
 const NO_ROUTES: RouteMap = new Map();
 
+/** Same idea, one level up: no proposals yet, so nothing to choose between. */
+const NO_OPTIONS: RouteOptionMap = new Map();
+
 /**
- * The route engine, run whenever the destinations change.
+ * Every route the engine can propose, for every pair in the trip.
+ *
+ * NOT `buildRouteMap`, WHICH IS THE SAME CALL WITH THE CHOICE MADE FOR
+ * YOU. Its own doc says to reach for this pair instead "wherever the
+ * alternatives matter — a UI offering the traveller the choice this
+ * function makes silently on their behalf". That UI now exists, so the
+ * shell holds the options and collapses them with `pickRoutes` once it
+ * knows what the traveller picked.
  *
  * ASYNCHRONOUS BECAUSE THE ANSWER IS: resolving airports can mean
  * downloading and parsing the OurAirports table, so this cannot be a
@@ -48,14 +59,14 @@ const NO_ROUTES: RouteMap = new Map();
  * The cancelled flag is the ordinary out-of-order guard: edit twice
  * quickly and the first response must not overwrite the second.
  */
-function useRoutes(trip: Trip): RouteMap {
-  const [routes, setRoutes] = useState<RouteMap>(NO_ROUTES);
+function useRouteOptions(trip: Trip): RouteOptionMap {
+  const [options, setOptions] = useState<RouteOptionMap>(NO_OPTIONS);
 
   useEffect(() => {
     let cancelled = false;
 
-    buildRouteMap(trip).then((next) => {
-      if (!cancelled) setRoutes(next);
+    proposeTripRoutes(trip).then((next) => {
+      if (!cancelled) setOptions(next);
     });
 
     return () => {
@@ -66,7 +77,7 @@ function useRoutes(trip: Trip): RouteMap {
     // question the engine was asked.
   }, [routeKey(trip)]);
 
-  return routes;
+  return options;
 }
 
 /** The destinations, in order — everything `buildRouteMap` actually reads. */
@@ -74,6 +85,38 @@ function routeKey(trip: Trip): string {
   return tripPlaces(trip)
     .map((place) => place.id)
     .join(">");
+}
+
+/**
+ * The origin → first destination pair, with the alternatives the
+ * engine found for it and the mode its access hop currently carries.
+ *
+ * `undefined` until there is both an origin and a destination — which
+ * is most of the popup's life, since it is asking for exactly those.
+ */
+function firstLegChoice(trip: Trip, options: RouteOptionMap) {
+  const [from, to] = tripPlaces(trip);
+  if (!from || !to) return undefined;
+
+  const pair = hopId(from, to);
+  const proposals = options.get(pair);
+  if (!proposals || proposals.length === 0) return undefined;
+
+  // The access hop's mode as it stands — the engine's guess unless the
+  // traveller has already overridden it, which is what the row shows
+  // as selected.
+  const accessMode = legs0Mode(trip, proposals);
+
+  return { pair, options: proposals, accessMode };
+}
+
+/** The mode currently in effect on the first hop of the first proposal. */
+function legs0Mode(trip: Trip, proposals: readonly RouteOption[]) {
+  const first = proposals[0]?.hops[0];
+  if (!first) return undefined;
+  return (
+    trip.hopOverrides[hopId(first.from, first.to)]?.mode ?? first.mode
+  );
 }
 
 function App() {
@@ -95,12 +138,32 @@ function App() {
   // once per edit is the whole point of the derive-don't-store rule,
   // not once per render of an unrelated bit of state (like the
   // selected leg).
-  const routes = useRoutes(trip);
+  const routeOptions = useRouteOptions(trip);
+
+  // Which alternative the traveller picked, per destination pair, by
+  // `RouteOption.id`. Named rather than stored as hops on purpose (see
+  // `pickRoutes`): the choice survives the engine being re-run with
+  // better data, where a snapshot of its output would not.
+  const [chosenRoutes, setChosenRoutes] = useState<Record<HopId, string>>({});
+
+  const routes = useMemo(
+    () => (routeOptions.size === 0 ? NO_ROUTES : pickRoutes(routeOptions, chosenRoutes)),
+    [routeOptions, chosenRoutes],
+  );
 
   const legs = useMemo(
     () => deriveLegs(trip, routes, defaultMode),
     [trip, routes],
   );
+
+  // Everything the onboarding popup's third question needs, and
+  // nothing else: the leg OUT OF the origin is the only one it asks
+  // about, because it is the only one whose starting point the
+  // traveller has just told us.
+  const firstLeg = useMemo(() => firstLegChoice(trip, routeOptions), [
+    trip,
+    routeOptions,
+  ]);
 
   return (
     <div className="flex h-screen flex-col bg-bark-100 text-bark-800">
@@ -122,6 +185,16 @@ function App() {
           })
         }
         onDone={() => setWelcoming(false)}
+        firstLegOptions={firstLeg?.options}
+        chosenRouteId={firstLeg && chosenRoutes[firstLeg.pair]}
+        accessMode={firstLeg?.accessMode}
+        onPickAccessMode={(hop, mode) =>
+          dispatch({ type: "set-hop-override", hop, patch: { mode } })
+        }
+        onPickRoute={(optionId) =>
+          firstLeg &&
+          setChosenRoutes((chosen) => ({ ...chosen, [firstLeg.pair]: optionId }))
+        }
       />
 
       <header className="flex shrink-0 items-center gap-4 border-b border-bark-200 bg-parchment px-4 py-2.5">

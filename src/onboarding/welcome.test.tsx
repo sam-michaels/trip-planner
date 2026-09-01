@@ -294,7 +294,10 @@ describe("Welcome, step 2", () => {
     });
   }
 
-  it("emits the chosen destination and finishes", async () => {
+  it("emits the chosen destination and moves on rather than ending", async () => {
+    // Step 3 asks how you reach the gateway, and whether there IS one
+    // isn't known at this instant — the engine is still answering. So
+    // the flow advances and the last step decides what it has to say.
     const onDestination = vi.fn<(place: Place) => void>();
     const onDone = vi.fn();
     await atStepTwo({ onDestination, onDone });
@@ -307,6 +310,37 @@ describe("Welcome, step 2", () => {
 
     expect(onDestination).toHaveBeenCalledTimes(1);
     expect(onDestination.mock.calls[0][0].city).toBe(LISBON.city);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(buttonSaying("Start planning")).toBeDefined();
+  });
+
+  it("finishes from the last step", async () => {
+    const onDone = vi.fn();
+    await atStepTwo({ onDone });
+
+    const lisbon = [
+      ...container.querySelectorAll<HTMLButtonElement>('button[aria-label^="Add "]'),
+    ].find((card) => card.getAttribute("aria-label")?.startsWith("Add Lisbon,"));
+    click(lisbon!);
+    click(buttonSaying("Start planning")!);
+
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks nothing about the airport when there is direct service", async () => {
+    // No gateway in the proposals means the engine made no choice on
+    // the traveller's behalf, so there is nothing to hand back — the
+    // step is a finish button and the counter says two, not three.
+    await atStepTwo({});
+
+    const lisbon = [
+      ...container.querySelectorAll<HTMLButtonElement>('button[aria-label^="Add "]'),
+    ].find((card) => card.getAttribute("aria-label")?.startsWith("Add Lisbon,"));
+    click(lisbon!);
+
+    expect(container.querySelector('[role="radiogroup"]')).toBeNull();
+    // And the counter stays honest: three screens either way, rather
+    // than the "Step 3 of 2" a conditional total produced.
+    expect(container.textContent).toContain("Step 3 of 3");
   });
 });

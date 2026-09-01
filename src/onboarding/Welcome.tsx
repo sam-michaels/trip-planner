@@ -13,7 +13,9 @@
 import { Loader2, LocateFixed, RotateCcw } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
-import type { Place } from "../model/trip";
+import type { HopId, Place, TransportMode } from "../model/trip";
+import type { RouteOption } from "../lib/routing";
+import { AccessRow } from "./AccessRow";
 import {
   detectHomeLocation as detectHomeLocationReal,
   type HomeLocationResult,
@@ -44,6 +46,18 @@ interface WelcomeProps {
   onOrigin: (place: Place) => void;
   onDestination: (place: Place) => void;
   onDone: () => void;
+  /**
+   * The engine's proposals for the leg out of `origin`, once it has
+   * them. Step 3 only exists when these describe a gateway, and they
+   * arrive a moment after step 2 is answered — so the step appears
+   * when the answer does, rather than making the traveller wait on a
+   * question that may not need asking.
+   */
+  firstLegOptions?: readonly RouteOption[];
+  chosenRouteId?: string;
+  accessMode?: TransportMode;
+  onPickAccessMode?: (hop: HopId, mode: TransportMode) => void;
+  onPickRoute?: (optionId: string) => void;
   /** Injected so tests never touch real geolocation. Defaults to the real one. */
   detectLocation?: () => Promise<HomeLocationResult>;
 }
@@ -53,6 +67,11 @@ export function Welcome({
   onOrigin,
   onDestination,
   onDone,
+  firstLegOptions,
+  chosenRouteId,
+  accessMode,
+  onPickAccessMode,
+  onPickRoute,
   detectLocation = detectHomeLocationReal,
 }: WelcomeProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -62,9 +81,24 @@ export function Welcome({
   const suppressCloseRef = useRef(false);
   const headingId = useId();
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [origin, setOrigin] = useState<Place>();
   const [detection, setDetection] = useState<Detection>({ kind: "idle" });
+
+  // Step 3 has something to ask exactly when the trip starts with a
+  // ground hop to an airport in another city — see `accessPair` in
+  // AccessRow for why that shape, and not "is it a gateway route", is
+  // the right test. When the airport is in your own city there is no
+  // journey to choose a mode for.
+  const showsAccess = (firstLegOptions ?? []).some((option) => {
+    const first = option.hops[0];
+    return (
+      first &&
+      first.mode !== "flight" &&
+      Boolean(first.to.iata) &&
+      first.to.city !== first.from.city
+    );
+  });
 
   function chooseOrigin(place: Place) {
     setOrigin(place);
@@ -74,12 +108,13 @@ export function Welcome({
 
   function chooseDestination(place: Place) {
     onDestination(place);
-    // SEAM FOR STEP 3: the parent agent's transport-mode row belongs
-    // here — shown only when the route engine had to route through a
-    // gateway (see src/lib/routing.ts) — before the dialog ends. That
-    // step doesn't exist yet, so choosing a destination is currently
-    // the whole flow and ends it directly.
-    onDone();
+    // Step 3 asks how you reach the gateway — a question that only
+    // exists if there IS a gateway, which the engine hasn't answered
+    // yet at this instant. So move there and let the step decide
+    // whether it has anything to say (see `showsAccess` below); if it
+    // turns out there's direct service, it renders the finish button
+    // and nothing else rather than a question with no answers.
+    setStep(3);
   }
 
   // Only ever reached from the button below — never from an effect.
@@ -145,15 +180,18 @@ export function Welcome({
       // is supposed to be sitting in front of.
       className="m-auto w-full max-w-md rounded-xl border border-bark-200 bg-parchment p-4 text-bark-900 shadow-lg backdrop:bg-bark-900/50"
     >
-      <p className="text-micro uppercase text-bark-600">Step {step} of 2</p>
+      {/*
+        Always three, because there are always three screens: the
+        third is the one you leave from, and it carries the airport
+        question only when there is one to ask. Making the total
+        conditional produced "Step 3 of 2" on the direct-service path,
+        which is the counter calling itself a liar.
+      */}
+      <p className="text-micro uppercase text-bark-600">Step {step} of 3</p>
       <h2 id={headingId} className="mt-0.5 text-title font-semibold text-bark-900">
-        {step === 1 ? "Where are you starting from?" : "Where do you want to go?"}
+        {HEADINGS[step]}
       </h2>
-      <p className="mt-1 text-caption text-bark-600">
-        {step === 1
-          ? "We'll use this as the trip's starting point."
-          : "Pick a city, or browse the list below."}
-      </p>
+      <p className="mt-1 text-caption text-bark-600">{BLURBS[step]}</p>
 
       {/*
         Announced separately from the visible copy above: the step
@@ -195,6 +233,34 @@ export function Welcome({
             )}
 
             <DetectionNote detection={detection} onRetry={runDetection} />
+          </div>
+        ) : step === 3 ? (
+          <div className="space-y-3">
+            {showsAccess && origin && (
+              <AccessRow
+                from={origin}
+                options={firstLegOptions ?? []}
+                chosenId={chosenRouteId}
+                currentMode={accessMode}
+                onPickMode={onPickAccessMode ?? (() => {})}
+                onPickRoute={onPickRoute ?? (() => {})}
+              />
+            )}
+
+            {/*
+              Always the way out, whether or not there was a third
+              question — a dialog you cannot dismiss is a trap, and
+              this is the only affordance that closes it deliberately
+              rather than by Escape.
+            */}
+            <button
+              type="button"
+              onClick={onDone}
+              autoFocus
+              className="w-full rounded-lg bg-moss-600 px-3 py-2 text-body font-semibold text-parchment transition hover:bg-moss-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
+            >
+              Start planning
+            </button>
           </div>
         ) : (
           <DestinationPicker
@@ -264,12 +330,22 @@ function messageFor(detection: HomeLocationResult): string {
   }
 }
 
-function statusFor(step: 1 | 2, detection: Detection): string {
+const HEADINGS: Record<1 | 2 | 3, string> = {
+  1: "Where are you starting from?",
+  2: "Where do you want to go?",
+  3: "Ready when you are",
+};
+
+const BLURBS: Record<1 | 2 | 3, string> = {
+  1: "We'll use this as the trip's starting point.",
+  2: "Pick a city, or browse the list below.",
+  3: "You can change any of this later.",
+};
+
+function statusFor(step: 1 | 2 | 3, detection: Detection): string {
   if (detection.kind === "detecting") return "Looking for your starting point…";
   if (detection.kind !== "idle" && detection.kind !== "found") {
     return messageFor(detection);
   }
-  return step === 1
-    ? "Step 1 of 2: where are you starting from?"
-    : "Step 2 of 2: where do you want to go?";
+  return `Step ${step}: ${HEADINGS[step]}`;
 }
