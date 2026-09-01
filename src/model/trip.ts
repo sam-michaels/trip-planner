@@ -416,6 +416,32 @@ const PORTO: Place = {
   coords: coords(-8.6291, 41.1579),
 };
 
+/**
+ * What the app actually boots into: a trip that knows nothing yet.
+ *
+ * WHY NOT `sampleTrip`. Opening onto somebody else's itinerary means
+ * the first thing every user does is delete two destinations they
+ * didn't choose, and it makes the onboarding question a lie — asking
+ * "where are you?" over a map already drawing London → Lisbon is
+ * asking a question that has visibly already been answered. An empty
+ * trip is also the state the model was just taught to represent
+ * honestly (`origin?: Place`), so this is the first thing that proves
+ * it works.
+ *
+ * `sampleTrip` stays, as the fixture the tests are written against.
+ */
+export const emptyTrip: Trip = {
+  id: "new-trip",
+  title: "Untitled trip",
+  travellers: 1,
+  homeCurrency: "CAD",
+  destinations: [],
+  hopOverrides: {},
+  stays: [],
+  activities: [],
+};
+
+/** The worked example the test suite is written against. Not what the app opens on. */
 export const sampleTrip: Trip = {
   id: "iberia-morocco-2026",
   title: "Portugal → Spain → Morocco",

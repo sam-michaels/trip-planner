@@ -18,7 +18,9 @@ import { tripReducer } from "./itinerary/tripReducer";
 import { TripMap } from "./map/TripMap";
 import { defaultMode } from "./itinerary/plausibleModes";
 import type { RouteMap, Trip } from "./model/trip";
-import { deriveLegs, sampleTrip, tripPlaces } from "./model/trip";
+import { deriveLegs, emptyTrip, tripPlaces } from "./model/trip";
+import { Welcome } from "./onboarding/Welcome";
+import { newId } from "./itinerary/tripReducer";
 import { buildRouteMap } from "./lib/routing";
 
 /**
@@ -78,8 +80,14 @@ function App() {
   // `TripState` holds only `trip` and an optional `undo` snapshot —
   // legs are never state (see the banner on `tripReducer.ts`), so
   // there is nothing left to compute for an initial value.
-  const [state, dispatch] = useReducer(tripReducer, { trip: sampleTrip });
+  const [state, dispatch] = useReducer(tripReducer, { trip: emptyTrip });
   const [selectedLegId, setSelectedLegId] = useState<string>();
+
+  // The popup opens on load and closes for good once it's answered.
+  // Deliberately not persisted: there is nothing to remember yet (no
+  // storage anywhere in the app), so a reload is a fresh trip and the
+  // question is worth asking again.
+  const [welcoming, setWelcoming] = useState(true);
 
   const { trip } = state;
 
@@ -96,6 +104,26 @@ function App() {
 
   return (
     <div className="flex h-screen flex-col bg-bark-100 text-bark-800">
+      {/*
+        Rendered inside the shell rather than beside it: a modal
+        <dialog> lives in the browser's top layer regardless of where
+        it sits in the tree (see DESIGN.md's Stacking Order Rule), so
+        the position here is about who owns the state, not paint order.
+        Each answer dispatches immediately, so the map and the list
+        fill in behind the scrim as the questions are answered.
+      */}
+      <Welcome
+        open={welcoming}
+        onOrigin={(place) => dispatch({ type: "set-origin", place })}
+        onDestination={(place) =>
+          dispatch({
+            type: "add-destination",
+            destination: { id: newId("dest"), place, status: "idea" },
+          })
+        }
+        onDone={() => setWelcoming(false)}
+      />
+
       <header className="flex shrink-0 items-center gap-4 border-b border-bark-200 bg-parchment px-4 py-2.5">
         {/*
           The one place the display face appears in the running app.
@@ -141,6 +169,9 @@ function App() {
             legs={legs}
             selectedLegId={selectedLegId}
             onSelectLeg={setSelectedLegId}
+            // Loaded and painted, but held still: motion behind a scrim
+            // is movement you can see and can't attend to.
+            forcePaused={welcoming}
           />
         </main>
       </div>
