@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { Leg, Money, PlanStatus, TransportMode } from "../model/trip";
+import type { Money, PlanStatus, TransportMode } from "../model/trip";
 
 export const MODES: TransportMode[] = [
   "flight",
@@ -134,11 +134,6 @@ export function formatMoney(money: Money): string {
     // code shouldn't blank out the row it appears on.
     return `${money.amount} ${money.currency}`;
   }
-}
-
-/** "Toronto → Lisbon" — how a leg is referred to in prose. */
-export function legLabel(leg: Leg): string {
-  return `${leg.from.city} → ${leg.to.city}`;
 }
 
 /** "Lisbon, PT" — a place's supporting line under its name. */

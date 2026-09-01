@@ -598,6 +598,10 @@ function gatewayChain(from: Place, to: Place, gateway: Gateway): RouteOption {
  * asked so a picker can offer all the answers. Deliberately no prices:
  * no free service quotes a bus fare, and an invented number is worse
  * than a blank the user can fill in from the booking site.
+ *
+ * NO CALLER YET, ON PURPOSE — this is what the onboarding popup's
+ * transport-mode row is built on, and that row is the next thing to be
+ * written. Not dead code; unlit code.
  */
 export interface AccessOption {
   mode: TransportMode;
@@ -772,11 +776,12 @@ function rank(
 /**
  * The airport lookup, bounded.
  *
- * `loadAirports` fetches without a signal, so a stalled connection
- * hangs forever rather than failing — and an engine that promises
- * never to reject would simply never settle instead, which is worse
- * than an error. A timeout reads as "no airports", which is a state
- * the caller already handles.
+ * The default `findAirports` is bounded at its own fetch now, so this
+ * is no longer patching a hole downstream. It stays because
+ * `findAirports` is an INJECTION POINT: `proposeRoutes` promises its
+ * callers it always settles, and that promise cannot be delegated to
+ * whatever implementation someone hands in. A timeout reads as "no
+ * airports", which is a state the caller already handles.
  */
 async function lookUpAirports(
   find: NonNullable<RouteEngineDeps["findAirports"]>,

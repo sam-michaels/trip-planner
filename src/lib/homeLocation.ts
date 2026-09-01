@@ -111,6 +111,15 @@ export async function reverseGeocodePlace(
   url.searchParams.set("lat", String(lat));
   url.searchParams.set("lon", String(lng));
   url.searchParams.set("addressdetails", "1");
+  // CITY LEVEL, NOT BUILDING LEVEL — the one line that keeps this from
+  // being a privacy problem. Nominatim's `/reverse` defaults to zoom 18,
+  // which resolves to the actual building you are standing in and hands
+  // back ITS lat/lon; `toPlace` would then store that street-level point
+  // as `trip.origin.coords` and the map would draw a line from your
+  // front door. Zoom 10 resolves to the city, so what comes back — and
+  // therefore all this app ever keeps — is the city's own coordinate.
+  // The precise fix is used for this one request and never stored.
+  url.searchParams.set("zoom", "10");
 
   const res = await fetch(url, { signal });
   if (!res.ok) {

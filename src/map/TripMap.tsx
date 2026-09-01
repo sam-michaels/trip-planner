@@ -59,7 +59,7 @@ const VEHICLES_SOURCE_ID = "vehicles";
 function styleUrl(): string | undefined {
   const key = import.meta.env.VITE_MAPTILER_KEY;
   return key
-    ? `https://api.maptiler.com/maps/landscape/style.json?key=${key}`
+    ? `https://api.maptiler.com/maps/landscape/style.json?key=${encodeURIComponent(key)}`
     : undefined;
 }
 

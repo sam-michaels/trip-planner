@@ -78,7 +78,7 @@ export function toPlace(result: NominatimResult, fallbackName: string): Place | 
 /**
  * Search for places matching a free-text query, best match first.
  *
- * WHY THIS EXISTS ALONGSIDE `fetchPlace`: an autocomplete needs to
+ * WHY IT RETURNS A LIST: an autocomplete needs to
  * show the user a choice. "Porto" could be the city, Campanhã station,
  * or São Bento station, and only the person planning the trip knows
  * which one they meant — guessing silently puts a leg endpoint in the
@@ -109,23 +109,6 @@ export async function searchPlaces(
   return results
     .map((r) => toPlace(r, query))
     .filter((p): p is Place => p !== undefined);
-}
-
-/**
- * Resolve a free-text query ("Seville", "Porto Campanhã station") to
- * a single `Place` — the best match that has a usable city/country.
- * Throws if nothing usable matches.
- *
- * Asks for several results rather than one because Nominatim's top hit
- * is sometimes an administrative region with no city attached; taking
- * the first *convertible* result is more useful than failing on it.
- */
-export async function fetchPlace(query: string): Promise<Place> {
-  const [best] = await searchPlaces(query, 5);
-  if (!best) {
-    throw new Error(`No place found for "${query}"`);
-  }
-  return best;
 }
 
 // ---------- Airports (OurAirports, by IATA code) ----------
@@ -186,12 +169,27 @@ interface AirportRow {
 const OUR_AIRPORTS_CSV_URL =
   "https://davidmegginson.github.io/ourairports-data/airports.csv";
 
+/**
+ * Longer than the 8s the rest of the app uses, because this is the one
+ * fetch that is a bulk download rather than a query: the CSV is several
+ * megabytes, `AbortSignal.timeout` counts total elapsed time rather
+ * than idle time, and 8s would abort a perfectly healthy download on a
+ * slow connection. The point is to bound a *stalled* connection, not to
+ * race a working one.
+ */
+const AIRPORTS_TIMEOUT_MS = 30_000;
+
 /** Fetched and parsed once per session, then reused for every airport lookup. */
 let airportsByIata: Promise<Map<string, AirportRow>> | undefined;
 
 function loadAirports(): Promise<Map<string, AirportRow>> {
   if (!airportsByIata) {
-    airportsByIata = fetch(OUR_AIRPORTS_CSV_URL)
+    airportsByIata = fetch(OUR_AIRPORTS_CSV_URL, {
+      // Without this a stalled connection never settles, and every
+      // caller awaiting an airport hangs with it — including the route
+      // engine, which promises its callers it will always answer.
+      signal: AbortSignal.timeout(AIRPORTS_TIMEOUT_MS),
+    })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to load airport data (${res.status})`);

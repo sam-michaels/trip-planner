@@ -22,7 +22,7 @@
 // So the paths below are vendored: copied verbatim from lucide-react
 // v1.34.0 (ISC licensed), which is the same version rendering them in
 // the editor. TO REFRESH after a lucide upgrade, read `__iconNode`
-// from the icon modules named in `LUCIDE_SOURCE` and re-copy. If they
+// from the icon modules named in the table below and re-copy. If they
 // ever drift, the map and the list will visibly disagree, which is a
 // loud enough failure not to need a test.
 // ============================================================
@@ -32,16 +32,16 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import type { TransportMode } from "../model/trip";
 import { MODES, MODE_COLORS } from "../itinerary/labels";
 
-/** Which lucide icon each mode's geometry came from — keep in step with
- * `MODE_ICONS` in `itinerary/labels.ts`, which is what the UI renders. */
-const LUCIDE_SOURCE: Record<TransportMode, string> = {
-  flight: "plane",
-  train: "train-front",
-  bus: "bus",
-  car: "car",
-  ferry: "ship",
-  walk: "footprints",
-};
+// Which lucide icon each mode's geometry came from — keep in step with
+// `MODE_ICONS` in `itinerary/labels.ts`, which is what the UI renders:
+//
+//   flight: plane      train: train-front   bus:  bus
+//   car:    car        ferry: ship          walk: footprints
+//
+// This was a `Record<TransportMode, string>` re-exported under a second
+// name purely so nothing would look unused and delete it. A comment is
+// what it always was; a constant nothing reads is not more durable than
+// one, just harder to see through.
 
 /** Inner SVG elements, on lucide's standard 24x24 viewBox. */
 const MODE_GLYPHS: Record<TransportMode, string> = {
@@ -114,7 +114,3 @@ export async function addModeIcons(map: MapLibreMap): Promise<void> {
     }),
   );
 }
-
-// Referenced so the source table isn't dead weight a future reader
-// deletes: it's the instruction for how to regenerate MODE_GLYPHS.
-export const VENDORED_FROM = LUCIDE_SOURCE;

@@ -76,19 +76,6 @@ export function fromInputValue(value: string): string | undefined {
 }
 
 /**
- * Offset a time by a number of hours, e.g. an arrival from a departure
- * plus a journey length.
- *
- * (`midpoint` used to live beside this. It existed only to slot a
- * dragged leg between its two neighbours' departures, and it went with
- * the drag code — destinations carry explicit order now, so nothing
- * ever needs a time chosen for it to hold a position.)
- */
-export function shiftHours(value: string, hours: number): string {
-  return fromMillis(toMillis(value) + hours * 3_600_000);
-}
-
-/**
  * Human-readable form: "Sat 12 Sep, 14:00".
  *
  * The year is appended only when it isn't the current one — trips are

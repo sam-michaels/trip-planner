@@ -46,11 +46,19 @@ export interface RateTable {
  */
 const cache = new Map<CurrencyCode, Promise<RateTable>>();
 
+/** Matches the 8s the rest of the app's network calls use. */
+const RATES_TIMEOUT_MS = 8_000;
+
 export function fetchRates(base: CurrencyCode): Promise<RateTable> {
   const cached = cache.get(base);
   if (cached) return cached;
 
-  const request = fetch(`${RATES_URL}${encodeURIComponent(base)}`)
+  const request = fetch(`${RATES_URL}${encodeURIComponent(base)}`, {
+    // A stalled rates request must fail rather than hang: `CostSummary`
+    // awaits this, and an unsettled promise leaves the total showing a
+    // loading state that never resolves.
+    signal: AbortSignal.timeout(RATES_TIMEOUT_MS),
+  })
     .then(async (res) => {
       if (!res.ok) throw new Error(`Exchange rates unavailable (${res.status})`);
 
