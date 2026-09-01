@@ -347,11 +347,14 @@ async function airOptions(
   deps: RouteEngineDeps,
 ): Promise<RouteOption[]> {
   const radiusKm = transferLimitKm(km);
-  const find = deps.findAirports ?? liveAirports;
+  // One injected stub still answers both ends in tests; only the live
+  // lookups differ, and only in how small an airport they will admit.
+  const findLocal = deps.findAirports ?? liveLocalAirports;
+  const findFar = deps.findAirports ?? liveAirports;
 
   const [origins, destinations] = await Promise.all([
-    airportsNear(from, radiusKm, preferCurated, find),
-    airportsNear(to, radiusKm, preferCurated, find),
+    airportsNear(from, radiusKm, preferCurated, findLocal),
+    airportsNear(to, radiusKm, preferCurated, findFar),
   ]);
 
   // Nowhere to land is the end of it. Nowhere to take off from is not:
@@ -801,6 +804,21 @@ async function lookUpAirports(
  */
 const liveAirports = (near: Coordinates) =>
   nearestAirports(near, { minType: "large_airport", limit: 5 });
+
+/**
+ * The same lookup, one size down, for the end you are LEAVING.
+ *
+ * WHY THE TWO ENDS WANT DIFFERENT FLOORS: at the far end a
+ * `medium_airport` is noise — you are crossing an ocean and will land
+ * at something large. At the near end it is the whole point. London,
+ * Ontario's YXU is a medium airport with twelve routes in the dataset,
+ * one of which is Toronto — which makes it the origin of the access
+ * flight in the trip this engine was built around. Filtering it out
+ * leaves "fly to your gateway" permanently unofferable for everyone who
+ * does not already live next to a hub.
+ */
+const liveLocalAirports = (near: Coordinates) =>
+  nearestAirports(near, { minType: "medium_airport", limit: 5 });
 
 /**
  * Drop the hops that go nowhere.

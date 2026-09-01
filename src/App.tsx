@@ -10,22 +10,69 @@
 // library would buy nothing at this size.
 // ============================================================
 
-import { useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 
 import { CostSummary } from "./cost/CostSummary";
 import { ItineraryPanel } from "./itinerary/ItineraryPanel";
 import { tripReducer } from "./itinerary/tripReducer";
 import { TripMap } from "./map/TripMap";
 import { defaultMode } from "./itinerary/plausibleModes";
-import type { RouteMap } from "./model/trip";
+import type { RouteMap, Trip } from "./model/trip";
 import { deriveLegs, sampleTrip } from "./model/trip";
+import { buildRouteMap } from "./lib/routing";
 
-// TODO(wave-2): an empty `RouteMap` because Unit 6's route engine
-// (src/lib/routing.ts) isn't wired in here yet. `deriveLegs` degrades
-// to one placeholder hop per destination pair — moded by geography, so
-// the Atlantic crossing still comes out as a flight — which is enough
-// to seed the itinerary and the map until the engine is connected.
+/**
+ * What the itinerary looks like before the engine has answered.
+ *
+ * `deriveLegs` degrades to one placeholder hop per destination pair, so
+ * the first paint is London → Lisbon as a single line. That is the old
+ * permanent behaviour, now reduced to a frame or two while the routes
+ * resolve — worth keeping rather than showing an empty map, because a
+ * straight line between the right two cities is a fair sketch of a
+ * journey whose airports are still being worked out.
+ */
 const NO_ROUTES: RouteMap = new Map();
+
+/**
+ * The route engine, run whenever the destinations change.
+ *
+ * ASYNCHRONOUS BECAUSE THE ANSWER IS: resolving airports can mean
+ * downloading and parsing the OurAirports table, so this cannot be a
+ * `useMemo`. It starts empty, fills in, and `deriveLegs` handles both
+ * states — which is also what makes it safe when the network is gone:
+ * `proposeRoutes` never rejects, so a failure lands as a smaller answer
+ * rather than an error boundary.
+ *
+ * The cancelled flag is the ordinary out-of-order guard: edit twice
+ * quickly and the first response must not overwrite the second.
+ */
+function useRoutes(trip: Trip): RouteMap {
+  const [routes, setRoutes] = useState<RouteMap>(NO_ROUTES);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    buildRouteMap(trip).then((next) => {
+      if (!cancelled) setRoutes(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // Keyed on the places, not the whole trip: renaming the trip or
+    // editing a hop's cost changes `trip` without changing a single
+    // question the engine was asked.
+  }, [routeKey(trip)]);
+
+  return routes;
+}
+
+/** The destinations, in order — everything `buildRouteMap` actually reads. */
+function routeKey(trip: Trip): string {
+  return [trip.origin, ...trip.destinations.map((d) => d.place)]
+    .map((place) => place.id)
+    .join(">");
+}
 
 function App() {
   // `TripState` holds only `trip` and an optional `undo` snapshot —
@@ -40,9 +87,11 @@ function App() {
   // once per edit is the whole point of the derive-don't-store rule,
   // not once per render of an unrelated bit of state (like the
   // selected leg).
+  const routes = useRoutes(trip);
+
   const legs = useMemo(
-    () => deriveLegs(trip, NO_ROUTES, defaultMode),
-    [trip],
+    () => deriveLegs(trip, routes, defaultMode),
+    [trip, routes],
   );
 
   return (
