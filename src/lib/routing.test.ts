@@ -40,7 +40,14 @@ import {
 
 // The trip the whole app is built against, taken from the model rather
 // than retyped — a copy here would drift the day someone edits it.
-const LONDON_ON = sampleTrip.origin;
+// `sampleTrip.origin` is typed optional now that a trip can exist
+// before anyone's said where they are, but this fixture always has
+// one — this just asserts that without reaching for `!`.
+function requireOrigin(trip: Trip): Place {
+  if (!trip.origin) throw new Error("sampleTrip must have an origin");
+  return trip.origin;
+}
+const LONDON_ON = requireOrigin(sampleTrip);
 const LISBON = sampleTrip.destinations[0].place;
 const PORTO = sampleTrip.destinations[1].place;
 
@@ -345,6 +352,57 @@ describe("proposeRoutes — choosing between ground and air", () => {
     for (const option of options) {
       expect(option.hops[0].to.country, option.id).toBe("FR");
     }
+  });
+
+  it("offers both ways to reach a gateway you could also travel to", async () => {
+    // Paris is ~390km from Lyon: close enough to take a train to, and
+    // also somewhere LYS flies several times a day. Those are two
+    // genuinely different mornings — three hours on a train, or an
+    // hour in the air plus the airport either side — and the engine
+    // used to pick for you, because it asked "can I reach this hub
+    // overland?" and stopped asking as soon as the answer was yes.
+    //
+    // This is what the onboarding popup's transport row is choosing
+    // between, so both have to exist as options with DISTINCT IDS —
+    // `pickRoutes` records the traveller's choice by id, and two
+    // chains sharing one would make the choice unrepresentable.
+    const lys = airport(
+      "LYS",
+      "Lyon Saint-Exupéry Airport",
+      "Colombier-Saugnieu",
+      "FR",
+      5.0811,
+      45.7256,
+    );
+    const options = await proposeRoutes(
+      place("lyon", "Lyon", "FR", 4.8357, 45.764),
+      TORONTO,
+      datasetOf([lys]),
+    );
+
+    const ids = idsOf(options);
+    expect(ids).toContain("gateway-cdg-yyz");
+    expect(ids).toContain("gateway-cdg-yyz-via-lys");
+
+    // The simpler trip leads: reaching a gateway without a second
+    // airport in the way is the one to beat, not the fallback.
+    expect(ids.indexOf("gateway-cdg-yyz")).toBeLessThan(
+      ids.indexOf("gateway-cdg-yyz-via-lys"),
+    );
+
+    const flown = options.find((o) => o.id === "gateway-cdg-yyz-via-lys")!;
+    expect(
+      flown.hops.map((hop) => [
+        hop.from.iata ?? hop.from.city,
+        hop.to.iata ?? hop.to.city,
+        hop.mode,
+      ]),
+    ).toEqual([
+      ["Lyon", "LYS", "train"],
+      ["LYS", "CDG", "flight"],
+      ["CDG", "YYZ", "flight"],
+      ["YYZ", "Toronto", "train"],
+    ]);
   });
 
   it("flies an inland pair across the strait instead of ferrying it", async () => {

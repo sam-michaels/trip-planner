@@ -328,8 +328,16 @@ export interface Trip {
   travellers: number;
   /** What you want totals displayed in */
   homeCurrency: CurrencyCode;
-  /** Where the trip starts and (for now) ends — home. */
-  origin: Place;
+  /**
+   * Where the trip starts and (for now) ends — home.
+   *
+   * Absent until the traveller says where they are: a trip can exist
+   * before that's known (see the onboarding "where are you?" prompt),
+   * and forcing a placeholder `Place` into this field would just be a
+   * lie stored as data. Read the trip as an ordered walk through
+   * `tripPlaces()`, not by reaching for `origin` directly.
+   */
+  origin?: Place;
   /**
    * ORDER IS ARRAY POSITION. Nothing else. Not dates, not ids.
    *
@@ -463,6 +471,21 @@ export type ModeGuess = (from: Place, to: Place) => TransportMode;
 const guessNothing: ModeGuess = () => "car";
 
 /**
+ * `[origin, ...destinations]` — the trip as a walk, skipping an origin
+ * nobody has set yet.
+ *
+ * WHY THIS EXISTS: five call sites across the app used to write this
+ * concatenation by hand, which was fine while `origin` was required.
+ * Now that it's optional, each of those five would also need its own
+ * null check — this is the one place that check lives, so an absent
+ * origin is just a shorter walk rather than a `!` or a scattered `if`.
+ */
+export function tripPlaces(trip: Trip): Place[] {
+  const rest = trip.destinations.map((d) => d.place);
+  return trip.origin ? [trip.origin, ...rest] : rest;
+}
+
+/**
  * Every leg of the trip, in order, built fresh from destinations.
  *
  * The walk is over `[origin, ...destinations]` pairwise, so a trip
@@ -482,7 +505,7 @@ export function deriveLegs(
   guessMode: ModeGuess = guessNothing,
 ): Leg[] {
   const legs: Leg[] = [];
-  const places = [trip.origin, ...trip.destinations.map((d) => d.place)];
+  const places = tripPlaces(trip);
 
   // The same physical hop can occur twice in one trip (Lisbon → Porto
   // on the way up, and again after a detour). The override is shared —
@@ -620,6 +643,12 @@ export function findGaps(trip: Trip, routes: RouteMap): ItineraryGap[] {
   for (let i = 0; i < trip.destinations.length; i++) {
     const previous = trip.destinations[i - 1];
     const from = previous ? previous.place : trip.origin;
+    // No previous destination and no origin set: there's no pair here
+    // to judge connectivity on. "You haven't said where you are" is a
+    // different claim from "these two places don't connect", and
+    // reporting the former as the latter is the false-alarm problem
+    // the connector work just fixed — so skip, don't invent a gap.
+    if (!from) continue;
     const to = trip.destinations[i].place;
 
     if (from.id === to.id) continue;

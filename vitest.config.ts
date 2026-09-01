@@ -31,6 +31,10 @@ export default mergeConfig(
       // `exclude` overrides vitest's defaults wholesale, which would
       // quietly re-admit node_modules and dist.
       exclude: [...configDefaults.exclude, '**/.claude/**'],
+      // Stands in for browser APIs jsdom leaves out — currently just
+      // `<dialog>`'s modal methods. See the file for what it does and
+      // deliberately does not emulate.
+      setupFiles: ['./src/test/setup.ts'],
     },
   }),
 )

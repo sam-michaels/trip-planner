@@ -18,7 +18,7 @@ import { tripReducer } from "./itinerary/tripReducer";
 import { TripMap } from "./map/TripMap";
 import { defaultMode } from "./itinerary/plausibleModes";
 import type { RouteMap, Trip } from "./model/trip";
-import { deriveLegs, sampleTrip } from "./model/trip";
+import { deriveLegs, sampleTrip, tripPlaces } from "./model/trip";
 import { buildRouteMap } from "./lib/routing";
 
 /**
@@ -69,7 +69,7 @@ function useRoutes(trip: Trip): RouteMap {
 
 /** The destinations, in order — everything `buildRouteMap` actually reads. */
 function routeKey(trip: Trip): string {
-  return [trip.origin, ...trip.destinations.map((d) => d.place)]
+  return tripPlaces(trip)
     .map((place) => place.id)
     .join(">");
 }

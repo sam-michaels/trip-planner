@@ -36,7 +36,7 @@ import type {
   TransportMode,
   Trip,
 } from "../model/trip";
-import { hopId } from "../model/trip";
+import { hopId, tripPlaces } from "../model/trip";
 import { defaultMode, plausibleModes } from "../itinerary/plausibleModes";
 import { distanceKm, isLandConnected } from "./geo";
 import { hubByIata, isHub, nearestHubs } from "./hubs";
@@ -478,9 +478,9 @@ interface Gateway {
   /** The airport at the far end that this gateway actually reaches. */
   arrival: Place;
   km: number;
-  /** 1 = reachable overland, 2 = reachable only by flying to it. */
-  tier: 1 | 2;
-  /** For tier 2: the local airport the access flight leaves from. */
+  /** You can simply travel to this hub — no flight needed to reach it. */
+  overland: boolean;
+  /** A local airport with a direct flight to the hub, when one exists. */
   via?: Place;
 }
 
@@ -527,49 +527,71 @@ function gatewayOptions(
 
       const km = distanceKm(from.coords, hub.coords);
 
-      // Tier 1: you can simply travel there. Same overland rules the
-      // transfer to your own airport already follows — including the
-      // short leash on crossing a border, because `isLandConnected`
-      // works on continents and cannot see a strait.
+      // Can you simply travel there? Same overland rules the transfer
+      // to your own airport already follows — including the short leash
+      // on crossing a border, because `isLandConnected` works on
+      // continents and cannot see a strait.
       const overland =
         km <= MAX_TRANSFER_KM &&
         isLandConnected(from.country, hub.country) &&
         (hub.country === from.country || km <= MAX_CROSS_BORDER_TRANSFER_KM);
 
-      // Tier 2: too far to drive, but your own airport flies there.
-      // This is the London → Toronto case when the bus is not wanted.
-      const via = overland
-        ? undefined
-        : origins.find(
-            (origin) =>
-              origin.id !== hub.id && servesDirect(origin, hub) === true,
-          );
+      // Does something near home fly there? Asked WHETHER OR NOT the
+      // hub is drivable, which is the change: these are two different
+      // journeys to the same airport, not a fallback for when the first
+      // one fails. London ON → Toronto is a two-hour drive AND a
+      // one-hour flight out of YXU, and which of those a traveller
+      // wants is a question about their morning, not about geography.
+      // Asking only when the drive was impossible meant the second
+      // answer existed solely for people who had no first one.
+      const via = origins.find(
+        (origin) => origin.id !== hub.id && servesDirect(origin, hub) === true,
+      );
 
       if (!overland && !via) continue;
 
-      candidates.push({
-        hub,
-        arrival: destination,
-        km,
-        tier: overland ? 1 : 2,
-        via,
-      });
+      candidates.push({ hub, arrival: destination, km, overland, via });
     }
   }
 
-  return candidates
-    .sort((a, b) => a.tier - b.tier || a.km - b.km)
-    .slice(0, GATEWAY_CANDIDATES)
-    .map((candidate) => gatewayChain(from, to, candidate));
+  return (
+    candidates
+      // Drivable hubs first, then nearest — a gateway you can reach
+      // without a second airport is the simpler trip, and simpler wins
+      // ties it doesn't deserve to lose.
+      .sort((a, b) => Number(b.overland) - Number(a.overland) || a.km - b.km)
+      .slice(0, GATEWAY_CANDIDATES)
+      // One gateway can now yield two chains, so this is a flatMap and
+      // not a map. Both are offered when both are real; the overland
+      // one leads, for the same reason it sorts first.
+      .flatMap((candidate) => [
+        ...(candidate.overland ? [gatewayChain(from, to, candidate)] : []),
+        ...(candidate.via
+          ? [gatewayChain(from, to, candidate, candidate.via)]
+          : []),
+      ])
+  );
 }
 
 /**
  * The chain through a gateway. Four hops when the gateway itself has to
  * be flown to, which is a real shape and not a bug: London → YXU → YYZ
  * → LIS → Lisbon is one way people genuinely make that trip.
+ *
+ * `via` is passed in rather than read off the gateway because one
+ * gateway describes both ways of reaching it, and this builds one of
+ * them at a time. Omit it for the overland chain, pass it for the one
+ * that flies. **The ids must differ** — `pickRoutes` matches a
+ * traveller's choice by id, so two chains sharing one would make the
+ * choice between them unrepresentable.
  */
-function gatewayChain(from: Place, to: Place, gateway: Gateway): RouteOption {
-  const { hub, arrival, via } = gateway;
+function gatewayChain(
+  from: Place,
+  to: Place,
+  gateway: Gateway,
+  via?: Place,
+): RouteOption {
+  const { hub, arrival } = gateway;
 
   const access: RouteHop[] = via
     ? [
@@ -578,9 +600,15 @@ function gatewayChain(from: Place, to: Place, gateway: Gateway): RouteOption {
       ]
     : [{ from, to: hub, mode: defaultMode(from, hub) }];
 
+  const id = via
+    ? `gateway-${code(hub)}-${code(arrival)}-via-${code(via)}`
+    : `gateway-${code(hub)}-${code(arrival)}`;
+
   return {
-    id: `gateway-${code(hub)}-${code(arrival)}`.toLowerCase(),
-    label: `Fly ${airportLabel(hub)} → ${airportLabel(arrival)}, via ${hub.city}`,
+    id: id.toLowerCase(),
+    label: via
+      ? `Fly ${airportLabel(hub)} → ${airportLabel(arrival)}, connecting from ${airportLabel(via)}`
+      : `Fly ${airportLabel(hub)} → ${airportLabel(arrival)}, via ${hub.city}`,
     hops: chain([
       ...access,
       { from: hub, to: arrival, mode: "flight" },
@@ -891,7 +919,7 @@ export async function proposeTripRoutes(
   trip: Trip,
   deps: RouteEngineDeps = {},
 ): Promise<RouteOptionMap> {
-  const places = [trip.origin, ...trip.destinations.map((d) => d.place)];
+  const places = tripPlaces(trip);
 
   const pairs = new Map<HopId, [Place, Place]>();
   for (let i = 0; i < places.length - 1; i++) {

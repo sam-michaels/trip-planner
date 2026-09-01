@@ -62,7 +62,7 @@ import type {
   Place,
   RouteMap,
 } from "../model/trip";
-import { findGaps } from "../model/trip";
+import { findGaps, tripPlaces } from "../model/trip";
 import { DestinationPicker } from "./DestinationPicker";
 import { HopEditor } from "./HopEditor";
 import { occurrenceCount, overrideForLeg } from "./hopOverrides";
@@ -112,7 +112,7 @@ export function ItineraryPanel({
 
   const segments = legsByDestination(trip.origin, trip.destinations, legs);
   const tripCurrencies = collectCurrencies(legs);
-  const knownPlaces = [trip.origin, ...trip.destinations.map((d) => d.place)];
+  const knownPlaces = tripPlaces(trip);
 
   // Keyed by `toDestinationId` (unique by construction, see
   // `ItineraryGap`) rather than by hop id: a gap is rendered on the
@@ -348,15 +348,20 @@ function DropIndicator() {
  * Which derived legs lead into each destination, in trip order.
  *
  * `legs` is the whole trip's hops flattened into one array, in the
- * order `deriveLegs` walked `[origin, ...destinations]`. Rather than
- * re-deriving a chain per destination pair — which would restart the
+ * order `deriveLegs` walked `tripPlaces(trip)`. Rather than re-deriving
+ * a chain per destination pair — which would restart the
  * occurrence-suffix numbering (`#2`, `#3`, …) that has to stay global
  * across the trip — this just consumes legs off the front until one
  * arrives at the destination's place, mirroring the same "same place
  * twice produces no leg" skip `deriveLegs` makes.
+ *
+ * `origin` can be absent (nobody's said where they are yet). That's
+ * just a shorter walk, the same way `tripPlaces` treats it: the first
+ * destination has no inbound leg to consume, so it gets an empty
+ * segment rather than a null check standing in for one.
  */
 function legsByDestination(
-  origin: Place,
+  origin: Place | undefined,
   destinations: Destination[],
   legs: Leg[],
 ): Leg[][] {
@@ -367,7 +372,7 @@ function legsByDestination(
   for (const destination of destinations) {
     const segment: Leg[] = [];
 
-    if (place.id !== destination.place.id) {
+    if (place && place.id !== destination.place.id) {
       while (cursor < legs.length) {
         const leg = legs[cursor++];
         segment.push(leg);

@@ -408,8 +408,16 @@ keeping small.
   `shadow-sm`): applied only to a *selected* leg card and to the selected mode
   and status chips in the editor. It marks state, never rest.
 - **Overlay** (`box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px
-  rgba(0,0,0,0.1)` — Tailwind `shadow-lg`): the cost breakdown popover, the only
-  thing in the app that floats over content.
+  rgba(0,0,0,0.1)` — Tailwind `shadow-lg`): the cost breakdown popover and the
+  onboarding dialog surface — the two things in the app that float over
+  content, one inline in the document, one in the browser's top layer. The
+  dialog is `parchment`, the card scale's `12px` radius (see Shapes), and this
+  same shadow; it is a card, not a new kind of surface.
+- **Scrim** (`::backdrop { background: rgba(38, 42, 34, 0.5) }` — `bark-900` at
+  50%): the dimming layer behind the onboarding dialog. `bark-900` keeps it in
+  the system's own neutral rather than a generic black, and 50% is chosen so
+  the map reads *behind glass* — its colour and shapes still recognisable, no
+  detail worth competing with the dialog for attention.
 - **Selection ring** (`box-shadow: 0 0 0 3px <mode colour>26`): a 3px ring in
   the selected leg's own mode colour at 15% alpha, paired with a border in the
   same colour at full strength.
@@ -423,6 +431,17 @@ keeping small.
 *own* mode colour — a ring on the card, a halo on the map — not as a generic
 highlight. That is what makes a row and a line find each other across the two
 panes.
+
+**The Stacking Order Rule.** Four things stack, low to high: the map with its
+in-map controls (including the motion control), the cost breakdown popover
+above it, the onboarding dialog's scrim above that, and the dialog surface
+above the scrim. The first two are ordinary document stacking, and a future
+overlay with a high enough z-index could in principle sit over the popover.
+The last two cannot be outranked that way: a native `<dialog>` opened with
+`showModal()` renders in the browser's top layer, above every ordinary z-index
+by construction, so the dialog and its scrim are always above the popover
+regardless of what the popover claims. This is not a general elevation scale —
+these are the four things that currently stack, named in the order they stack.
 
 ## Shapes
 
@@ -527,6 +546,34 @@ rather than flat regions of colour.
 There is no site navigation. The app is a single shell; movement happens by
 selecting a leg, which is a two-way binding between the list and the map rather
 than a route change.
+
+The onboarding dialog does not change that. It is a native `<dialog>` that
+opens once, on load, and asks three questions — where you are, where you want
+to go, how you'd reach the airport — over a shell that stays visible and live
+behind it. It is not a route and it is not a step in a flow: there is nowhere
+it takes you, and closing it does not navigate anywhere, it just stops asking.
+The map and the list are exactly the same map and list once it is gone.
+
+### Named Rules
+
+**The One Modal Rule.** The onboarding dialog is the only modal in the app,
+and it is not a pattern to reach for again. It exists because it is the one
+question the app has to ask before the shell means anything, and it asks it
+exactly once. A second modal would need its own version of that justification
+— a task that cannot be answered inline in the list or the map, that has to
+interrupt rather than wait its turn, and that is asked once rather than
+repeated on every visit. Short of all three, a new dialog is a sign that
+something belongs in the shell instead. See Elevation & Depth for the scrim
+and the stacking order this one rule introduces.
+
+**The Modal Contract Rule.** A modal dialog owns focus while it is open: focus
+moves into it when it opens, stays inside it while it is open, and returns to
+whatever was focused before it opened when it closes. `Escape` closes it. Its
+scrim is decorative — it exists to be seen, not read — so it carries no role
+or text of its own; every word the dialog has to say is inside it. WCAG 2.2 AA
+is binding across this app (see `PRODUCT.md`), and a dialog is the easiest
+place to break that promise by accident, because the browser supplies some of
+this for free and the eye cannot tell which part that was.
 
 ### Signature: the connector strip
 

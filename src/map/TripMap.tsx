@@ -91,9 +91,17 @@ interface TripMapProps {
   selectedLegId?: string;
   /** Called with a leg id when a line is clicked, `undefined` for empty map. */
   onSelectLeg?: (legId: string | undefined) => void;
+  /** Hold the vehicles still from outside — see `effectivePaused` below for
+   * how this combines with the button's own state. */
+  forcePaused?: boolean;
 }
 
-export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
+export function TripMap({
+  legs,
+  selectedLegId,
+  onSelectLeg,
+  forcePaused = false,
+}: TripMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const url = styleUrl();
@@ -112,6 +120,16 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
   useEffect(() => {
     setPaused(prefersReducedMotion);
   }, [prefersReducedMotion]);
+
+  // `paused` is a SEED the user (or their OS) can still overrule by
+  // pressing the button. `forcePaused` is an OVERRIDE from outside — an
+  // onboarding modal sitting on top of the map, say — and the button
+  // can't win against it: the map has to stay still while the modal
+  // owns the screen regardless of what `paused` currently is. `paused`
+  // itself is never touched by `forcePaused`, so when the modal closes
+  // the map returns to exactly what the user/OS had it at, rather than
+  // resetting to "playing".
+  const effectivePaused = forcePaused || paused;
 
   // The route features, computed once and shared: the source needs
   // them and so does the vehicle sampler, and recomputing the great
@@ -138,12 +156,26 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
   // The pause button is a plain DOM control, so React can't re-render
   // it. It's pushed the new state instead, which also covers the case
   // where the state changed from the media query rather than a click.
+  // Synced with the combined value, not the bare `paused` state: while
+  // `forcePaused` holds the map still the button has to read as pressed
+  // too, since that's the true state of the map.
+  //
+  // WHY `paused` IS ALSO A DEPENDENCY when nothing reads it here. A
+  // click during the override flips the seed underneath without moving
+  // `effectivePaused`, so an effect keyed on the combined value alone
+  // would never re-run — and `MotionControl` has already re-rendered
+  // itself to "playing" by then, leaving the button claiming the map
+  // is moving while it sits still. Depending on the seed as well
+  // re-fires the sync, which pushes the true value back and snaps the
+  // button to pressed. A modal makes the rest of the page inert, so
+  // this click is hard to reach in practice; it costs one array entry
+  // to make the control honest rather than accidentally honest.
   const motionRef = useRef<MotionControl | null>(null);
-  const pausedRef = useRef(paused);
+  const pausedRef = useRef(effectivePaused);
   useEffect(() => {
-    pausedRef.current = paused;
-    motionRef.current?.sync(paused);
-  }, [paused]);
+    pausedRef.current = effectivePaused;
+    motionRef.current?.sync(effectivePaused);
+  }, [effectivePaused, paused]);
 
   // Map is created once and kept for the component's lifetime — see
   // the effect below for how leg edits reach an already-live map.
@@ -247,7 +279,7 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
 
     if (epochRef.current === 0) epochRef.current = performance.now();
 
-    if (paused) {
+    if (effectivePaused) {
       // Parked at the midpoint of each line, at full presence. A
       // resting map still shows one icon per route rather than none.
       source.setData(vehicleCollection(legPaths, 0, selectedLegId, true));
@@ -266,7 +298,7 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
     // No visibilitychange handling: requestAnimationFrame is already
     // suspended in a background tab, so a hidden map costs nothing.
     return () => cancelAnimationFrame(frame);
-  }, [legPaths, selectedLegId, layersReady, paused]);
+  }, [legPaths, selectedLegId, layersReady, effectivePaused]);
 
   // Selection -> the highlight layer's filter. Repainting a filter is
   // far cheaper than rebuilding the source, and it keeps "which leg is

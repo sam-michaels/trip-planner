@@ -268,7 +268,7 @@ export function tripReducer(state: TripState, action: TripAction): TripState {
     }
 
     case "set-origin":
-      if (action.place.id === state.trip.origin.id) return state;
+      if (action.place.id === state.trip.origin?.id) return state;
       return edit(state, { ...state.trip, origin: action.place });
 
     case "set-hop-override": {
