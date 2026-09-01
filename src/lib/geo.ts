@@ -37,6 +37,33 @@ export function distanceKm(a: Coordinates, b: Coordinates): number {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
 }
 
+/**
+ * Initial bearing from `a` to `b`, in degrees clockwise from north.
+ *
+ * "Initial" is the part that matters: on a sphere the bearing of a
+ * great-circle route changes as you fly it — a flight from London to
+ * Seattle leaves on roughly 330 and arrives on roughly 250. So this is
+ * only meaningful for a short segment, which is exactly how the map
+ * uses it: the heading of the one polyline segment a vehicle is
+ * currently crossing, not the heading of the whole leg.
+ */
+export function bearingDegrees(a: Coordinates, b: Coordinates): number {
+  const [lngA, latA] = a;
+  const [lngB, latB] = b;
+
+  const phiA = toRadians(latA);
+  const phiB = toRadians(latB);
+  const dLng = toRadians(lngB - lngA);
+
+  const y = Math.sin(dLng) * Math.cos(phiB);
+  const x =
+    Math.cos(phiA) * Math.sin(phiB) -
+    Math.sin(phiA) * Math.cos(phiB) * Math.cos(dLng);
+
+  // atan2 returns -PI..PI; the +360 % 360 folds that onto a compass.
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 // ---------- Continents ----------
 
 export type Continent =

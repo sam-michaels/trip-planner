@@ -5,9 +5,12 @@
 // WHAT EACH CHANNEL CARRIES:
 //
 //   * MODE is the line's colour, read off the feature (`LEG_COLOR`
-//     below, set from `MODE_COLORS` in geometry.ts), reinforced by
-//     that mode's icon repeated along the line — the same icon the
-//     editor and the leg card use (see modeSprites.ts);
+//     below, set from `MODE_COLORS` in geometry.ts), reinforced by a
+//     vehicle in that mode travelling the line — the same icon the
+//     editor and the leg card use (see modeSprites.ts, vehicles.ts);
+//   * DIRECTION is which way that vehicle goes, which is the only
+//     thing on the map that tells Porto -> Lisbon from Lisbon ->
+//     Porto;
 //   * STATUS is dashed-versus-solid, plus opacity;
 //   * SELECTION is a wide soft halo in the leg's own colour, so the
 //     route lights up rather than a different route appearing under
@@ -47,7 +50,7 @@ const CASING_COLOR = "#ffffff";
 // Raised across the board from the old 0.45/0.75/1: an "idea" faded
 // almost to nothing, which made a trip that is mostly ideas — i.e.
 // every trip worth planning — look washed out and provisional.
-const STATUS_OPACITY: Record<PlanStatus, number> = {
+export const STATUS_OPACITY: Record<PlanStatus, number> = {
   idea: 0.72,
   planned: 0.86,
   booked: 1,
@@ -79,7 +82,14 @@ export function legLayerIds(sourceId: string) {
     highlight: `${sourceId}-highlight`,
     dashed: `${sourceId}-dashed`,
     solid: `${sourceId}-solid`,
-    markers: `${sourceId}-markers`,
+  };
+}
+
+/** Layer ids for the vehicle layers, which live on their own source. */
+export function vehicleLayerIds(sourceId: string) {
+  return {
+    upright: `${sourceId}-upright`,
+    heading: `${sourceId}-heading`,
   };
 }
 
@@ -182,25 +192,68 @@ export function legLineLayers(sourceId: string): LayerSpecification[] {
         "line-width": 3,
       },
     },
+  ];
+}
+
+/**
+ * The vehicle travelling each route: one symbol per leg, over the
+ * separate source `vehicles.ts` rewrites every frame. Keeping it off
+ * the leg source is the whole point — a per-frame `setData` must not
+ * drag the route geometry through the worker with it.
+ *
+ * This replaced the mode icons that used to be stamped along the line
+ * every 130px. See vehicles.ts for why both together didn't work.
+ *
+ * WHY TWO LAYERS FOR ONE THING: `icon-rotation-alignment` is a LAYOUT
+ * property, so like `line-dasharray` above it can only vary per layer,
+ * never per feature. Glyphs drawn from above may be turned to face
+ * their heading; glyphs drawn head-on or in side elevation must stay
+ * upright even when the user spins the map. That's two alignments, so
+ * it's two layers, split by a `rotates` flag the features carry.
+ *
+ * Opacity and size are read off the feature rather than computed here:
+ * they change sixty times a second, and a layer repaint per frame
+ * would be a far more expensive way to say the same thing.
+ */
+export function vehicleLayers(sourceId: string): LayerSpecification[] {
+  const ids = vehicleLayerIds(sourceId);
+  const vehicle = {
+    type: "symbol" as const,
+    source: sourceId,
+    layout: {
+      "icon-image": MODE_ICON_EXPRESSION as unknown as ExpressionSpecification,
+      "icon-size": ["get", "size"] as unknown as ExpressionSpecification,
+      // A vehicle that blinks out because it drifted near another
+      // symbol is broken, not decluttered. The repeated markers this
+      // replaced wanted the opposite and let MapLibre thin them.
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+    },
+    paint: {
+      "icon-opacity": ["get", "opacity"] as unknown as ExpressionSpecification,
+    },
+  };
+
+  return [
     {
-      // The mode icons, repeated along each route.
-      id: ids.markers,
-      type: "symbol",
-      source: sourceId,
+      ...vehicle,
+      id: ids.upright,
+      filter: ["!=", ["get", "rotates"], true],
       layout: {
-        "symbol-placement": "line",
-        // Far enough apart to punctuate a long flight arc without
-        // turning it into a dotted line of planes.
-        "symbol-spacing": 130,
-        "icon-image": MODE_ICON_EXPRESSION as unknown as ExpressionSpecification,
-        // Upright regardless of the line's bearing: a plane rotated to
-        // follow a great circle reads as a crash, not a heading.
+        ...vehicle.layout,
         "icon-rotation-alignment": "viewport",
-        "icon-allow-overlap": false,
-        "icon-padding": 6,
       },
-      paint: {
-        "icon-opacity": statusOpacity,
+    },
+    {
+      ...vehicle,
+      id: ids.heading,
+      filter: ["==", ["get", "rotates"], true],
+      layout: {
+        ...vehicle.layout,
+        // `map`, not `viewport`: the heading is relative to north, so
+        // it has to stay true when the compass turns the map.
+        "icon-rotation-alignment": "map",
+        "icon-rotate": ["get", "heading"] as unknown as ExpressionSpecification,
       },
     },
   ];

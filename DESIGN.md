@@ -541,12 +541,48 @@ suppressed in the alert tone.
 
 ### Signature: the route on the map
 
-Six layers over one GeoJSON source, bottom to top: an invisible 20px hit line so
-a 3px route is a real touch target, a `7px` white casing, a `16px` blurred
-selection halo, the dashed and solid line pair split by status, and mode icons
-repeated along the line every `130px`. Icons stay upright regardless of the
-line's bearing — a plane rotated to follow a great circle reads as a crash, not
-a heading.
+Five layers over one GeoJSON source, bottom to top: an invisible 20px hit line
+so a 3px route is a real touch target, a `7px` white casing, a `16px` blurred
+selection halo, and the dashed and solid line pair split by status. Above them,
+on a source of their own, the vehicles.
+
+### Signature: the vehicle on the line
+
+One vehicle per route, in that leg's mode and colour, departing A and arriving
+B on a loop. It replaced a static mode icon stamped along the line every
+`130px`, which said what kind of journey a line was but never which way it
+went — nothing on the map distinguished Porto → Lisbon from Lisbon → Porto.
+A run departs, travels, arrives, holds at B for the last sixth of its cycle,
+and fades; it does not wrap straight back to the start, because a journey that
+teleports home reads as a stutter rather than a second trip. Pace is by ground
+distance, clamped to `4s`–`14s`, so a walk across a city is not glacial and an
+ocean crossing is not a blur. Runs are phase-offset from the leg's id so the
+map is not a parade.
+
+### Named Rules
+
+**The Moving Heading Rule.** A vehicle drawn from above may be turned to face
+where it is going; one drawn head-on or in side elevation may not. The plane
+and the footprints are plan views and take their bearing. The train, ship, bus
+and car are elevations — turning a side-view car to a westward heading drives
+it along upside down — so they stay upright even when the compass turns the
+map. This overturns the old rule that icons never rotate, and the reason it can
+be overturned is motion: a *stationary* tilted plane reads as falling, and a
+*moving* one reads as a heading. Rotation without movement is still banned.
+
+**The Stoppable Motion Rule.** Any motion that starts on its own and loops is
+seeded from `prefers-reduced-motion` and carries a visible control that stops
+it. WCAG 2.2 SC 2.2.2 asks for a mechanism in the content, reachable by someone
+who has never opened their OS accessibility settings, and the media query alone
+is not that. When motion is held off, the vehicles park at their midpoints
+rather than disappearing — a resting map still shows one icon per route.
+
+**The Selection-Is-Size Rule.** Where selection has to be marked on something
+already carrying status opacity, it is marked by size and full strength, never
+by dimming everything else. The unselected vehicles sit at their own line's
+opacity, which for an idea is `0.72` — the floor below which nothing unbooked
+may be faded. Dimming the rest to make one stand out would have broken the one
+rule protecting ideas from looking like failures.
 
 ## Do's and Don'ts
 
@@ -568,6 +604,8 @@ a heading.
 - **Do** give every map-driven action a keyboard and list equivalent; the
   itinerary list is the non-visual equivalent of the map.
 - **Do** use `parchment` for anything floating and `bark-100` for the ground.
+- **Do** give looping motion an off switch and a `prefers-reduced-motion`
+  default, and park what was moving rather than removing it.
 
 ### Don't:
 
@@ -598,3 +636,5 @@ a heading.
   and nothing in it should push a decision.
 - **Don't** add gradients, blobs, mascots or illustration. Character comes from
   the palette, the map and one line of quiet prose.
+- **Don't** rotate an icon that isn't moving, or rotate one drawn head-on or in
+  side elevation at all. A tilted stationary plane reads as a crash.

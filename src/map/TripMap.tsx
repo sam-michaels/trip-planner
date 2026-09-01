@@ -11,15 +11,30 @@ import {
   type MapMouseEvent,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Leg } from "../model/trip";
+import { usePrefersReducedMotion } from "../lib/useReducedMotion";
 import { legsToCollection } from "./geometry";
+import { MotionControl } from "./MotionControl";
 import { addModeIcons } from "./modeSprites";
-import { legLayerIds, legLineLayers, selectedLegFilter } from "./style";
+import { legPath } from "./path";
+import {
+  legLayerIds,
+  legLineLayers,
+  selectedLegFilter,
+  vehicleLayers,
+} from "./style";
+import type { LegWithPath } from "./vehicles";
+import { vehicleCollection } from "./vehicles";
 
 const LEGS_SOURCE_ID = "legs";
 const LAYER_IDS = legLayerIds(LEGS_SOURCE_ID);
+
+/** The vehicles get their own source: it is rewritten every frame, and
+ * dragging the route geometry through the worker with it would mean
+ * re-parsing the whole trip sixty times a second to move six dots. */
+const VEHICLES_SOURCE_ID = "vehicles";
 
 /**
  * WHY A STYLE URL AND NOT RAW TILES: MapLibre renders a full vector
@@ -89,6 +104,29 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
   // of guessing at it with a timeout.
   const [layersReady, setLayersReady] = useState(false);
 
+  // Someone who has asked their OS for less movement gets a still map
+  // on arrival. It SEEDS the button rather than overriding it — see
+  // MotionControl.ts for why that distinction matters.
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [paused, setPaused] = useState(prefersReducedMotion);
+  useEffect(() => {
+    setPaused(prefersReducedMotion);
+  }, [prefersReducedMotion]);
+
+  // The route features, computed once and shared: the source needs
+  // them and so does the vehicle sampler, and recomputing the great
+  // circles for the second reader would double the only genuinely
+  // expensive part of drawing a trip.
+  const legCollection = useMemo(() => legsToCollection(legs), [legs]);
+  const legPaths = useMemo<LegWithPath[]>(
+    () =>
+      legs.map((leg, index) => ({
+        leg,
+        path: legPath(legCollection.features[index]),
+      })),
+    [legs, legCollection],
+  );
+
   // Held in a ref so the click handler is registered once, at layer
   // setup, rather than being torn down and re-added every time the
   // parent re-renders with a new callback identity.
@@ -96,6 +134,16 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
   useEffect(() => {
     selectRef.current = onSelectLeg;
   }, [onSelectLeg]);
+
+  // The pause button is a plain DOM control, so React can't re-render
+  // it. It's pushed the new state instead, which also covers the case
+  // where the state changed from the media query rather than a click.
+  const motionRef = useRef<MotionControl | null>(null);
+  const pausedRef = useRef(paused);
+  useEffect(() => {
+    pausedRef.current = paused;
+    motionRef.current?.sync(paused);
+  }, [paused]);
 
   // Map is created once and kept for the component's lifetime — see
   // the effect below for how leg edits reach an already-live map.
@@ -111,11 +159,20 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
       fitBoundsOptions: { padding: 48 },
     });
     map.addControl(new NavigationControl(), "top-right");
+
+    // Read through a ref, not the `paused` binding: this effect runs
+    // once per map and would otherwise capture whatever the state was
+    // at mount forever.
+    const motion = new MotionControl(pausedRef.current, setPaused);
+    map.addControl(motion, "top-right");
+    motionRef.current = motion;
+
     mapRef.current = map;
 
     return () => {
       map.remove();
       mapRef.current = null;
+      motionRef.current = null;
       setLayersReady(false);
     };
     // Intentionally only depends on `url`: initial camera uses whatever
@@ -130,13 +187,12 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
     const map = mapRef.current;
     if (!map) return;
 
-    const collection = legsToCollection(legs);
     let cancelled = false;
 
     const applyLegs = async () => {
       const source = map.getSource(LEGS_SOURCE_ID) as GeoJSONSource | undefined;
       if (source) {
-        source.setData(collection);
+        source.setData(legCollection);
         return;
       }
 
@@ -147,10 +203,21 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
       // images are rasterizing.
       if (cancelled || mapRef.current !== map) return;
 
-      map.addSource(LEGS_SOURCE_ID, { type: "geojson", data: collection });
+      map.addSource(LEGS_SOURCE_ID, { type: "geojson", data: legCollection });
       for (const layer of legLineLayers(LEGS_SOURCE_ID)) {
         map.addLayer(layer);
       }
+
+      // Added after the line layers, and therefore drawn above them:
+      // a vehicle behind its own route would be a very quiet bug.
+      map.addSource(VEHICLES_SOURCE_ID, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      for (const layer of vehicleLayers(VEHICLES_SOURCE_ID)) {
+        map.addLayer(layer);
+      }
+
       setLayersReady(true);
     };
 
@@ -160,7 +227,46 @@ export function TripMap({ legs, selectedLegId, onSelectLeg }: TripMapProps) {
     return () => {
       cancelled = true;
     };
-  }, [legs]);
+  }, [legCollection]);
+
+  // The vehicles. One frame's work is: sample every path at the
+  // current time, and hand MapLibre a new point per leg.
+  //
+  // The epoch is set once and never reset, so selecting a leg or
+  // editing an unrelated one doesn't make every vehicle on the map
+  // jump to a new position mid-flight.
+  const epochRef = useRef(0);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !layersReady) return;
+
+    const source = map.getSource(VEHICLES_SOURCE_ID) as
+      | GeoJSONSource
+      | undefined;
+    if (!source) return;
+
+    if (epochRef.current === 0) epochRef.current = performance.now();
+
+    if (paused) {
+      // Parked at the midpoint of each line, at full presence. A
+      // resting map still shows one icon per route rather than none.
+      source.setData(vehicleCollection(legPaths, 0, selectedLegId, true));
+      return;
+    }
+
+    let frame = 0;
+    const tick = (now: number) => {
+      source.setData(
+        vehicleCollection(legPaths, now - epochRef.current, selectedLegId, false),
+      );
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    // No visibilitychange handling: requestAnimationFrame is already
+    // suspended in a background tab, so a hidden map costs nothing.
+    return () => cancelAnimationFrame(frame);
+  }, [legPaths, selectedLegId, layersReady, paused]);
 
   // Selection -> the highlight layer's filter. Repainting a filter is
   // far cheaper than rebuilding the source, and it keeps "which leg is
