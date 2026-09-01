@@ -7,12 +7,14 @@
 //
 // WHY NO OFFSET / NO "Z":
 //
-//   1. `orderedLegs()` sorts with `localeCompare`, i.e. lexicographic
-//      string comparison. That is only correct if every timestamp in
-//      the trip shares one format. Mixing "2026-09-12T14:00" with
-//      "2026-09-12T14:00:00Z" sorts them by punctuation rather than by
-//      time, and the itinerary silently comes out in the wrong order.
-//      One format, enforced here, removes that whole failure mode.
+//   1. These strings compare correctly as plain strings — chronological
+//      order and lexicographic order coincide — but ONLY if every
+//      timestamp in the trip shares one format. Mixing
+//      "2026-09-12T14:00" with "2026-09-12T14:00:00Z" compares them by
+//      punctuation rather than by time. Itinerary order no longer
+//      depends on this (it's array position now, see the banner on
+//      `Trip.destinations`), but "is this hop before that one?" still
+//      does, and one format removes the whole failure mode.
 //
 //   2. `<input type="datetime-local">` both produces and consumes
 //      exactly this string, so the form boundary needs no conversion —
@@ -73,11 +75,15 @@ export function fromInputValue(value: string): string | undefined {
   return value.trim() === "" ? undefined : value;
 }
 
-/** Halfway between two times — used to slot a dragged leg between its new neighbours. */
-export function midpoint(a: string, b: string): string {
-  return fromMillis(Math.round((toMillis(a) + toMillis(b)) / 2));
-}
-
+/**
+ * Offset a time by a number of hours, e.g. an arrival from a departure
+ * plus a journey length.
+ *
+ * (`midpoint` used to live beside this. It existed only to slot a
+ * dragged leg between its two neighbours' departures, and it went with
+ * the drag code — destinations carry explicit order now, so nothing
+ * ever needs a time chosen for it to hold a position.)
+ */
 export function shiftHours(value: string, hours: number): string {
   return fromMillis(toMillis(value) + hours * 3_600_000);
 }

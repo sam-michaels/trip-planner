@@ -112,7 +112,7 @@ components:
   button-ghost-hover:
     backgroundColor: "{colors.bark-200}"
   button-dashed:
-    textColor: "{colors.bark-500}"
+    textColor: "{colors.bark-600}"
     typography: "{typography.body}"
     rounded: "{rounded.xl}"
     padding: "10px 12px"
@@ -475,7 +475,7 @@ rather than flat regions of colour.
 - **Primary:** `moss-700` fill, white text, `6px 12px`. Hover lifts to
   `moss-600`; disabled drops to `bark-300` with `cursor-not-allowed`.
 - **Ghost:** `bark-600` text on no fill, hover to `bark-200` at 70%.
-- **Dashed / add:** a `bark-300` dashed border, `bark-500` text, hovering to a
+- **Dashed / add:** a `bark-300` dashed border, `bark-600` text, hovering to a
   `bark-400` border with a parchment fill and `bark-900` text.
 - **Icon-only:** `bark-300`/`bark-400` at rest, darkening on hover; destructive
   icon buttons tint toward `rust-50` / `rust-600`.
@@ -494,7 +494,7 @@ rather than flat regions of colour.
 - **Status pill:** full-round, 10px medium, the same three colours on every row.
   Idea and planned carry a *dashed* border over a 50-level fill; booked is
   solid over a 100-level fill.
-- **Mode / status chips (in the editor):** transparent-bordered and `bark-500`
+- **Mode / status chips (in the editor):** transparent-bordered and `bark-600`
   at rest; on selection they take that mode's or status's colour as text and
   border over a ~6–8% fill. Selecting previews exactly how the map and the card
   will draw it, so the editor doubles as the legend for both channels.
@@ -515,10 +515,10 @@ rather than flat regions of colour.
 ### Inputs / Fields
 
 - **Style:** `parchment` fill, `bark-200` hairline, `8px` radius, `6px 10px`
-  padding, 14px text, `bark-400` placeholder.
+  padding, 14px text, `bark-600` placeholder.
 - **Focus:** border shifts to `moss-400` with a soft `moss-100` ring — a tint,
   not a glow.
-- **Label:** 12px medium `bark-500`, `4px` above the control, wrapping the input
+- **Label:** 12px medium `bark-600`, `4px` above the control, wrapping the input
   in a `<label>` rather than pairing by id.
 - **Numeric fields** carry `tabular-nums`.
 

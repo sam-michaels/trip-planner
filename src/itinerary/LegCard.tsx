@@ -1,31 +1,41 @@
 // ============================================================
-// One leg, collapsed.
+// One derived hop, collapsed.
 //
 // The card is a summary, not a form: it shows what you'd want when
 // scanning the whole trip — where, how, how firm, when, how much —
 // and everything else waits behind the edit button.
 //
-// TWO FACTS, TWO CHANNELS, AND THEY DON'T SHARE A PALETTE:
+// THREE FACTS, THREE CHANNELS, AND NO TWO OF THEM SHARE A PALETTE:
 //
 //   * MODE — what kind of journey this is — is the icon chip on the
 //     left, in that mode's colour. Same colour the map draws the
 //     route in, so a row and a line find each other.
 //   * STATUS — how firm the plan is — is the pill on the right, in
 //     that status's colour, which is the SAME on every card.
+//   * PROVENANCE — whether this hop is still the route engine's guess
+//     or carries something you said — is the plain bark chip on the
+//     meta line. Every leg is derived now, so "did I touch this?" is a
+//     question you can genuinely no longer answer from the values
+//     alone: an operator on a card is just as likely to be the
+//     engine's proposal as your booking. Bark rather than a mode or
+//     status colour, because provenance is a third fact and borrowing
+//     either palette would make "Yours" read as a plan state.
 //
-// They used to share one swatch: the status pill was painted in the
-// mode colour, so "Idea" was terracotta on the flight and pine on the
-// train. That made the pill useless for the one job it has — letting
-// you sweep the list and see how much of the trip is still a sketch —
-// because you were comparing three different colours all called Idea.
+// Mode and status used to share one swatch: the status pill was
+// painted in the mode colour, so "Idea" was terracotta on the flight
+// and pine on the train. That made the pill useless for the one job it
+// has — letting you sweep the list and see how much of the trip is
+// still a sketch — because you were comparing three different colours
+// all called Idea.
 // ============================================================
 
 import { GripVertical, Pencil, StickyNote } from "lucide-react";
 import type { DragEvent, KeyboardEvent } from "react";
 
-import type { Leg } from "../model/trip";
+import type { HopOverride, Leg } from "../model/trip";
 import { formatDateTime } from "./datetime";
 import { crossesTimezones, formatDuration, travelDuration } from "./duration";
+import { describeOverrides } from "./hopOverrides";
 import {
   MODE_COLORS,
   MODE_ICONS,
@@ -37,23 +47,49 @@ import {
 
 interface LegCardProps {
   leg: Leg;
+  /**
+   * What the user said about this hop, if anything — found through
+   * `overrideForLeg(trip.hopOverrides, leg.id)`, never by indexing
+   * `hopOverrides` with the leg id directly: a repeated hop's leg id
+   * carries an occurrence suffix its override does not. See
+   * hopOverrides.ts.
+   */
+  override?: HopOverride;
+  /**
+   * True when this row is a hop the route engine proposed, which is
+   * what licenses the card to say "From the route" about an empty one.
+   *
+   * NOT inferred from `override` being absent: a hand-assembled leg
+   * also has no override, and telling someone the engine proposed the
+   * leg they just typed in by hand is worse than saying nothing.
+   * Defaults to false so the legacy list keeps its old wording.
+   */
+  derived?: boolean;
   selected: boolean;
-  /** True while this card is the one being dragged, so it can fade out. */
-  dragging: boolean;
   onSelect: () => void;
   onEdit: () => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
+  /**
+   * Reordering is OPTIONAL, and absent for derived hops. You reorder a
+   * trip by reordering its destinations; dragging a hop would be asking
+   * to move a consequence independently of its cause. The props survive
+   * for the legacy hand-assembled list only, and the grip only appears
+   * when a caller actually supplies them.
+   */
+  dragging?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   /** Pointer moved over this card: `after` says which half it's in. */
-  onDragOverHalf: (after: boolean) => void;
+  onDragOverHalf?: (after: boolean) => void;
   /** Keyboard reordering, in list positions (-1 = up, +1 = down). */
-  onNudge: (delta: number) => void;
+  onNudge?: (delta: number) => void;
 }
 
 export function LegCard({
   leg,
+  override,
+  derived = false,
   selected,
-  dragging,
+  dragging = false,
   onSelect,
   onEdit,
   onDragStart,
@@ -67,8 +103,11 @@ export function LegCard({
   const duration = travelDuration(leg);
   const withinOneCity =
     leg.from.city === leg.to.city && leg.from.country === leg.to.country;
+  const reorderable = onDragStart !== undefined;
+  const overrideNote = describeOverrides(override);
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!onDragOverHalf) return;
     // Without preventDefault the browser refuses the drop outright —
     // the default for most elements is "not a drop target".
     event.preventDefault();
@@ -80,7 +119,7 @@ export function LegCard({
     // Alt+arrows, because drag-and-drop is unreachable by keyboard and
     // an itinerary you can't rearrange without a mouse is only half
     // usable. Alt keeps plain arrows free for scrolling the list.
-    if (!event.altKey) return;
+    if (!onNudge || !event.altKey) return;
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
@@ -103,9 +142,13 @@ export function LegCard({
     .filter(Boolean)
     .join(" · ");
 
+  const endpoints = withinOneCity
+    ? `${leg.from.name} to ${leg.to.name}`
+    : `${leg.from.city} to ${leg.to.city}`;
+
   return (
     <div
-      draggable
+      draggable={reorderable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragOver={handleDragOver}
@@ -123,13 +166,17 @@ export function LegCard({
         onClick={onSelect}
         onKeyDown={handleKeyDown}
         aria-pressed={selected}
-        className="min-w-0 flex-1 cursor-grab rounded-l-xl py-2 pr-1 pl-1.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss-500 active:cursor-grabbing"
+        className={`min-w-0 flex-1 rounded-l-xl py-2 pr-1 pl-1.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss-500 ${
+          reorderable ? "cursor-grab active:cursor-grabbing" : ""
+        }`}
       >
         <div className="flex items-center gap-1.5">
-          <GripVertical
-            className="size-3.5 shrink-0 text-bark-300 group-hover:text-bark-400"
-            aria-hidden
-          />
+          {reorderable && (
+            <GripVertical
+              className="size-3.5 shrink-0 text-bark-300 group-hover:text-bark-400"
+              aria-hidden
+            />
+          )}
 
           {/* Colour and glyph both say what kind of journey this is;
               filled-versus-dashed says how firm it is. */}
@@ -154,7 +201,7 @@ export function LegCard({
               stations is the only informative version of that row. */}
           <span className="min-w-0 flex-1 truncate text-body font-medium text-bark-900">
             {withinOneCity ? leg.from.name : leg.from.city}{" "}
-            <span className="text-bark-600">→</span>{" "}
+            <span className="text-bark-400">→</span>{" "}
             {withinOneCity ? leg.to.name : leg.to.city}
           </span>
 
@@ -169,16 +216,33 @@ export function LegCard({
           </span>
         </div>
 
-        <p className="mt-1 ml-11 truncate text-caption text-bark-700">
+        <p
+          className={`mt-1 truncate text-caption text-bark-600 ${reorderable ? "ml-11" : "ml-6"}`}
+        >
           {withinOneCity
             ? `Across ${leg.from.city}`
             : `${leg.from.name} → ${leg.to.name}`}
         </p>
 
-        <div className="mt-0.5 ml-11 flex items-baseline gap-2">
+        <div
+          className={`mt-0.5 flex items-baseline gap-2 ${reorderable ? "ml-11" : "ml-6"}`}
+        >
           <span className="min-w-0 flex-1 truncate text-caption text-bark-600">
-            {meta || "No date or operator yet"}
+            {meta ||
+              (derived && !overrideNote
+                ? "From the route — nothing set yet"
+                : "No date or operator yet")}
           </span>
+
+          {overrideNote && (
+            <span
+              title={overrideNote}
+              className="shrink-0 rounded-full border border-bark-200 bg-bark-50 px-1.5 py-px text-micro text-bark-600"
+            >
+              <span aria-hidden>Yours</span>
+              <span className="sr-only">{overrideNote}</span>
+            </span>
+          )}
 
           {leg.notes && (
             <StickyNote
@@ -188,7 +252,7 @@ export function LegCard({
           )}
 
           {leg.cost && (
-            <span className="shrink-0 text-caption font-medium text-bark-900 tabular-nums">
+            <span className="shrink-0 text-caption font-medium text-bark-700 tabular-nums">
               {formatMoney(leg.cost)}
             </span>
           )}
@@ -198,7 +262,7 @@ export function LegCard({
       <button
         type="button"
         onClick={onEdit}
-        aria-label={`Edit ${leg.from.city} to ${leg.to.city}`}
+        aria-label={`Edit ${endpoints}`}
         className="shrink-0 self-stretch rounded-r-xl px-2 text-bark-300 transition hover:bg-bark-50 hover:text-bark-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss-500"
       >
         <Pencil className="size-3.5" aria-hidden />

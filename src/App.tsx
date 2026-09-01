@@ -10,35 +10,40 @@
 // library would buy nothing at this size.
 // ============================================================
 
-import { useReducer, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 
 import { CostSummary } from "./cost/CostSummary";
 import { ItineraryPanel } from "./itinerary/ItineraryPanel";
 import { tripReducer } from "./itinerary/tripReducer";
 import { TripMap } from "./map/TripMap";
 import { defaultMode } from "./itinerary/plausibleModes";
-import type { RouteMap, Trip } from "./model/trip";
+import type { RouteMap } from "./model/trip";
 import { deriveLegs, sampleTrip } from "./model/trip";
 
 // TODO(wave-2): an empty `RouteMap` because Unit 6's route engine
-// doesn't exist yet. `deriveLegs` degrades to one placeholder hop per
-// destination pair — moded by geography, so the Atlantic crossing
-// still comes out as a flight — which is enough to seed the leg editor
-// and the map until the engine can propose real routes.
+// (src/lib/routing.ts) isn't wired in here yet. `deriveLegs` degrades
+// to one placeholder hop per destination pair — moded by geography, so
+// the Atlantic crossing still comes out as a flight — which is enough
+// to seed the itinerary and the map until the engine is connected.
 const NO_ROUTES: RouteMap = new Map();
 
-const initialState = (trip: Trip) => ({
-  trip,
-  legs: deriveLegs(trip, NO_ROUTES, defaultMode),
-});
-
 function App() {
-  // Lazy init: the initial state is only wanted on mount, and building
-  // it eagerly would re-derive every leg on every render for nothing.
-  const [state, dispatch] = useReducer(tripReducer, sampleTrip, initialState);
+  // `TripState` holds only `trip` and an optional `undo` snapshot —
+  // legs are never state (see the banner on `tripReducer.ts`), so
+  // there is nothing left to compute for an initial value.
+  const [state, dispatch] = useReducer(tripReducer, { trip: sampleTrip });
   const [selectedLegId, setSelectedLegId] = useState<string>();
 
-  const { trip, legs } = state;
+  const { trip } = state;
+
+  // Memoised on the trip, not recomputed on every render: deriving
+  // once per edit is the whole point of the derive-don't-store rule,
+  // not once per render of an unrelated bit of state (like the
+  // selected leg).
+  const legs = useMemo(
+    () => deriveLegs(trip, NO_ROUTES, defaultMode),
+    [trip],
+  );
 
   return (
     <div className="flex h-screen flex-col bg-bark-100 text-bark-800">
@@ -74,6 +79,7 @@ function App() {
         <aside className="flex min-h-0 flex-1 flex-col border-t border-bark-200 lg:w-108 lg:flex-none lg:border-t-0 lg:border-r">
           <ItineraryPanel
             state={state}
+            legs={legs}
             dispatch={dispatch}
             selectedLegId={selectedLegId}
             onSelectLeg={setSelectedLegId}
