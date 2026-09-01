@@ -1,12 +1,14 @@
 // ============================================================
 // The form controls the itinerary shares.
 //
-// WHY THESE MOVED OUT OF THE EDITOR: there are now two callers — the
-// hop editor, which records a disagreement with the route engine, and
-// the legacy leg editor still mounted by the panel until Unit 8
-// rebuilds it. A mode picker that exists twice is a mode picker that
-// drifts, and the drift shows up as two different ideas of which modes
-// are plausible for the same journey.
+// WHY THESE MOVED OUT OF THE EDITOR: they used to have two callers —
+// the hop editor, which records a disagreement with the route engine,
+// and the leg editor, which edited a stored leg directly. Unit 8
+// deleted the leg editor along with stored legs themselves, leaving
+// `StatusPicker` a second caller in the destination card and
+// `ModePicker`/`MoneyInput` used only by the hop editor — but they stay
+// shared rather than folded back in, because the day a second mode
+// picker reappears is the day it quietly drifts from this one.
 //
 // Everything here is presentational and stateless apart from the "other
 // modes" disclosure, which is pure view state and belongs with the
