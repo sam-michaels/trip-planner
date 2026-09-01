@@ -16,6 +16,7 @@
 // ============================================================
 
 import type { HopId, HopOverride } from "../model/trip";
+import type { TripAction } from "./tripReducer";
 
 /**
  * The occurrence suffix `deriveLegs` appends: `#2`, `#3`, …
@@ -130,25 +131,29 @@ export function describeOverrides(override?: HopOverride): string | undefined {
 }
 
 /**
- * The two writes the hop editor makes.
- *
- * TODO(unit-7): these belong in `TripAction` and Unit 7 owns that file,
- * so they are declared here and the editor takes a dispatch function
- * typed against them. When Unit 7 lands, this union should be deleted
- * and the editor retyped against `TripAction` — the shapes are chosen
- * to match the names the batch agreed on.
+ * The two writes the hop editor makes — narrowed out of `TripAction`
+ * rather than redeclared, so the editor's dispatch contract can't drift
+ * from what the reducer (`tripReducer.ts`) actually accepts. It used to
+ * be its own union with different property names (`override`, `field`)
+ * on the theory that the reducer's dispatch would "type-check unchanged"
+ * against it — it wouldn't have: same tags, different field names on
+ * each member, so nothing was ever structurally compatible. `Extract`
+ * makes that impossible to repeat, because there is only one
+ * declaration of the shape left to disagree with.
  *
  * SEMANTICS THE REDUCER MUST HONOUR, because the editor depends on
  * both and neither is inferable from the name:
  *
- *   * `set-hop-override` MERGES. Only the fields present in `override`
+ *   * `set-hop-override` MERGES. Only the fields present in `patch`
  *     change; everything else the user already said about this hop
  *     stays. The editor sends one field at a time.
- *   * `clear-hop-override` with a `field` removes THAT field, handing
- *     it back to the route engine. With no `field` it drops the whole
- *     override, so the hop is purely the engine's proposal again — and
- *     an override with no fields left should not linger in the record.
+ *   * `clear-hop-override` with `fields` removes just those, handing
+ *     them back to the route engine. With no `fields` it drops the
+ *     whole override, so the hop is purely the engine's proposal again
+ *     — and an override with no fields left should not linger in the
+ *     record.
  */
-export type HopOverrideAction =
-  | { type: "set-hop-override"; hop: HopId; override: HopOverride }
-  | { type: "clear-hop-override"; hop: HopId; field?: OverrideField };
+export type HopOverrideAction = Extract<
+  TripAction,
+  { type: "set-hop-override" | "clear-hop-override" }
+>;

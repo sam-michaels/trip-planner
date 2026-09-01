@@ -98,10 +98,10 @@ interface HopEditorProps {
   tripCurrencies: CurrencyCode[];
   homeCurrency: CurrencyCode;
   /**
-   * TODO(unit-7): retype as `Dispatch<TripAction>` once the reducer
-   * carries these two actions. `HopOverrideAction` is a subset of it by
-   * construction, so passing the trip dispatch straight in will
-   * type-check unchanged.
+   * `HopOverrideAction` is `Extract<TripAction, ...>` (see
+   * `hopOverrides.ts`), so the trip's own `Dispatch<TripAction>` is
+   * passed straight in — no adapter, because there is nothing left for
+   * one to bridge.
    */
   dispatch: (action: HopOverrideAction) => void;
   onClose: () => void;
@@ -125,9 +125,18 @@ export function HopEditor({
   const hopKey = baseHopId(leg.id);
 
   const set = (fields: HopOverride) =>
-    dispatch({ type: "set-hop-override", hop: hopKey, override: fields });
+    dispatch({ type: "set-hop-override", hop: hopKey, patch: fields });
+  // The reducer's `clear-hop-override` takes `fields` as an array so it
+  // can drop several at once; this editor always clears one field (or,
+  // via `resetEverything`, none — meaning "the whole override") at a
+  // time, so the single `field` argument is wrapped here rather than
+  // pushed out to every call site.
   const clear = (field?: OverrideField) =>
-    dispatch({ type: "clear-hop-override", hop: hopKey, field });
+    dispatch({
+      type: "clear-hop-override",
+      hop: hopKey,
+      fields: field ? [field] : undefined,
+    });
 
   /**
    * What each field falls back to when handed back to the engine.

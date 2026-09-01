@@ -43,7 +43,6 @@ import type { Dispatch, DragEvent, KeyboardEvent } from "react";
 import type { CurrencyCode, Destination, Leg, Place } from "../model/trip";
 import { DestinationPicker } from "./DestinationPicker";
 import { HopEditor } from "./HopEditor";
-import type { HopOverrideAction } from "./hopOverrides";
 import { occurrenceCount, overrideForLeg } from "./hopOverrides";
 import { LegCard } from "./LegCard";
 import { formatDateTime, fromInputValue, toInputValue } from "./datetime";
@@ -83,26 +82,6 @@ export function ItineraryPanel({
   const segments = legsByDestination(trip.origin, trip.destinations, legs);
   const tripCurrencies = collectCurrencies(legs);
   const knownPlaces = [trip.origin, ...trip.destinations.map((d) => d.place)];
-
-  // `HopEditor` (unit 11) predates the reducer's action shapes and was
-  // written against a slightly different one — `override`/`field`
-  // where the reducer settled on `patch`/`fields`. Its own comment
-  // assumed the two would type-check interchangeably; they don't
-  // (different property names on the same-tagged union members), so
-  // this is the small adapter that bridges them rather than a change
-  // to either file. Reconciling the two shapes for good belongs to
-  // whoever next touches `HopOverrideAction`.
-  function hopDispatch(action: HopOverrideAction) {
-    dispatch(
-      action.type === "set-hop-override"
-        ? { type: "set-hop-override", hop: action.hop, patch: action.override }
-        : {
-            type: "clear-hop-override",
-            hop: action.hop,
-            fields: action.field ? [action.field] : undefined,
-          },
-    );
-  }
 
   function handleDrop() {
     if (dragId === undefined || dropAt === undefined) return;
@@ -162,7 +141,7 @@ export function ItineraryPanel({
                   occurrences={occurrenceCount(legs, leg.id)}
                   tripCurrencies={tripCurrencies}
                   homeCurrency={trip.homeCurrency}
-                  dispatch={hopDispatch}
+                  dispatch={dispatch}
                   onClose={() => setEditor(undefined)}
                 />
               ) : (
