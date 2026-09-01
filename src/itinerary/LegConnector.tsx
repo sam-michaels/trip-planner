@@ -58,7 +58,23 @@ interface LegConnectorProps {
   arriving: Leg;
   departing: Leg;
   gap?: ConnectorGap;
-  onAddLeg: (options: {
+  /**
+   * OPTIONAL, AND DELIBERATELY SO. `describe()` below proposes an action
+   * for three different situations, and only two of them have anywhere
+   * to send the click: a gap is a hop the route engine already produced
+   * a placeholder for (see `deriveLegs`), so "Add leg" / "Add transfer"
+   * can open that hop's own editor and let the user describe it for
+   * real. A long stay's "Add a leg here" is a different request — a
+   * brand new, unrouted side trip that exists nowhere in `trip` yet —
+   * and the destination-first model has no action for inventing a leg
+   * that isn't a consequence of the destination list (see `trip.ts`'s
+   * banner on why legs are derived, never stored). Rather than wire
+   * that button to a reducer action that would have to reappear just
+   * for it, the caller omits this prop for the stay case and the
+   * button quietly doesn't render — an absent affordance, not a broken
+   * one.
+   */
+  onAddLeg?: (options: {
     from: Place;
     to: Place;
     /** Seeded from the arriving leg so a transfer starts when you land. */
@@ -150,7 +166,7 @@ export function LegConnector({
           )}
         </div>
 
-        {action && (
+        {action && onAddLeg && (
           <button
             type="button"
             onClick={() =>

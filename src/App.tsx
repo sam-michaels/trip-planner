@@ -129,6 +129,7 @@ function App() {
           <ItineraryPanel
             state={state}
             legs={legs}
+            routes={routes}
             dispatch={dispatch}
             selectedLegId={selectedLegId}
             onSelectLeg={setSelectedLegId}

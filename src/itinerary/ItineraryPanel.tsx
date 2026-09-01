@@ -26,25 +26,48 @@
 // classic reorderable-list off-by-one. Converted once, in `handleDrop`,
 // and nowhere else.
 //
-// WHAT'S DELIBERATELY NOT HERE YET: `LegConnector` (the "3 nights in
-// Lisbon" strip) and gap detection (`findGaps`) both need a `RouteMap`
-// with real routes in it to be worth showing — with `NO_ROUTES`, every
-// hop is a single placeholder guess and every consecutive pair would
-// report as an unrouted "hard gap", which is noise, not signal. A
-// destination card already states its own night count directly, which
-// covers the "time here isn't empty" idea for now. Both return once
-// the route engine (src/lib/routing.ts) is actually wired into `App`.
+// THE CONNECTOR SPINE: `LegConnector` renders in the gap between every
+// two consecutive legs, not just between destinations — a multi-hop
+// route (a connecting flight, say) has a real stop at the airport in
+// between, and that stop gets the same strip a destination does. A
+// `previousLeg` cursor tracks this across the whole render (mutated as
+// each leg renders, never reset per destination), so the connector
+// before a destination's first leg is the same code path as the one
+// between two hops inside one destination's chain — the render doesn't
+// need to know which case it's in.
+//
+// GAPS COME FROM THE ENGINE, NOT FROM GUESSING. `findGaps(trip, routes)`
+// is the one source of "this pair doesn't connect" — see its banner in
+// model/trip.ts for why that's now a genuinely rare, meaningful signal
+// rather than the noise it would have been against an empty `RouteMap`.
+// A gap can only ever land on the connector immediately before a
+// destination's FIRST leg: an unrouted pair always derives to exactly
+// one placeholder hop (`deriveLegs`), so there is no second leg in that
+// chain for a gap to attach to instead.
+//
+// THE FIRST LEG HAS NO CONNECTOR, and so a gap on the opening hop is
+// silent: a connector marks a stop between two legs, and there is no
+// leg before the first one. The placeholder `LegCard` still renders
+// and is editable like any other hop.
 // ============================================================
 
 import { GripVertical, Plus, StickyNote, Trash2, Undo2, X } from "lucide-react";
 import { Fragment, useState } from "react";
 import type { Dispatch, DragEvent, KeyboardEvent } from "react";
 
-import type { CurrencyCode, Destination, Leg, Place } from "../model/trip";
+import type {
+  CurrencyCode,
+  Destination,
+  Leg,
+  Place,
+  RouteMap,
+} from "../model/trip";
+import { findGaps } from "../model/trip";
 import { DestinationPicker } from "./DestinationPicker";
 import { HopEditor } from "./HopEditor";
 import { occurrenceCount, overrideForLeg } from "./hopOverrides";
 import { LegCard } from "./LegCard";
+import { LegConnector } from "./LegConnector";
 import { formatDateTime, fromInputValue, toInputValue } from "./datetime";
 import { STATUS_LABELS, STATUS_PILL_CLASSES, placeSubtitle } from "./labels";
 import { Field, FieldGroup, StatusPicker, inputClasses, labelled } from "./fields";
@@ -61,6 +84,13 @@ interface ItineraryPanelProps {
   state: TripState;
   /** Derived by the caller (`deriveLegs`) — see the banner on `tripReducer.ts`. */
   legs: Leg[];
+  /**
+   * Owned by `App` (`useRoutes`), not re-derived here. The panel's only
+   * use for it is `findGaps(trip, routes)` — running the engine a
+   * second time to answer that would mean two async fetches racing to
+   * describe the same trip.
+   */
+  routes: RouteMap;
   dispatch: Dispatch<TripAction>;
   selectedLegId?: string;
   onSelectLeg: (legId: string | undefined) => void;
@@ -69,6 +99,7 @@ interface ItineraryPanelProps {
 export function ItineraryPanel({
   state,
   legs,
+  routes,
   dispatch,
   selectedLegId,
   onSelectLeg,
@@ -82,6 +113,21 @@ export function ItineraryPanel({
   const segments = legsByDestination(trip.origin, trip.destinations, legs);
   const tripCurrencies = collectCurrencies(legs);
   const knownPlaces = [trip.origin, ...trip.destinations.map((d) => d.place)];
+
+  // Keyed by `toDestinationId` (unique by construction, see
+  // `ItineraryGap`) rather than by hop id: a gap is rendered on the
+  // connector leading INTO a destination, and that's the key the render
+  // loop below actually has in hand at that point.
+  const gapsByDestination = new Map(
+    findGaps(trip, routes).map((gap) => [gap.toDestinationId, gap]),
+  );
+
+  // Mutated once per rendered leg, in render order — the same "walk
+  // forward, remember where you were" shape `legsByDestination` already
+  // uses for `cursor`/`place`. This is what lets a connector appear
+  // between the last leg of one destination's chain and the first leg
+  // of the next without the two segments knowing about each other.
+  let previousLeg: Leg | undefined;
 
   function handleDrop() {
     if (dragId === undefined || dropAt === undefined) return;
@@ -133,32 +179,58 @@ export function ItineraryPanel({
           <Fragment key={destination.id}>
             {dropAt === index && <DropIndicator />}
 
-            {segments[index].map((leg) =>
-              editor?.kind === "hop" && editor.legId === leg.id ? (
-                <HopEditor
-                  key={leg.id}
-                  leg={leg}
-                  override={overrideForLeg(trip.hopOverrides, leg.id)}
-                  occurrences={occurrenceCount(legs, leg.id)}
-                  tripCurrencies={tripCurrencies}
-                  homeCurrency={trip.homeCurrency}
-                  dispatch={dispatch}
-                  onClose={() => setEditor(undefined)}
-                />
-              ) : (
-                <LegCard
-                  key={leg.id}
-                  leg={leg}
-                  override={overrideForLeg(trip.hopOverrides, leg.id)}
-                  derived
-                  selected={selectedLegId === leg.id}
-                  onSelect={() =>
-                    onSelectLeg(selectedLegId === leg.id ? undefined : leg.id)
-                  }
-                  onEdit={() => setEditor({ kind: "hop", legId: leg.id })}
-                />
-              ),
-            )}
+            {segments[index].map((leg, legIndex) => {
+              // Only a segment's first leg can carry a gap: an unrouted
+              // pair derives to exactly one placeholder hop (see the
+              // header banner), so there is never a second leg in the
+              // chain for the gap to land on instead.
+              const gap =
+                legIndex === 0
+                  ? gapsByDestination.get(destination.id)
+                  : undefined;
+              const arriving = previousLeg;
+              previousLeg = leg;
+
+              return (
+                <Fragment key={leg.id}>
+                  {arriving && (
+                    <LegConnector
+                      arriving={arriving}
+                      departing={leg}
+                      gap={gap}
+                      onAddLeg={
+                        gap
+                          ? () => setEditor({ kind: "hop", legId: leg.id })
+                          : undefined
+                      }
+                    />
+                  )}
+
+                  {editor?.kind === "hop" && editor.legId === leg.id ? (
+                    <HopEditor
+                      leg={leg}
+                      override={overrideForLeg(trip.hopOverrides, leg.id)}
+                      occurrences={occurrenceCount(legs, leg.id)}
+                      tripCurrencies={tripCurrencies}
+                      homeCurrency={trip.homeCurrency}
+                      dispatch={dispatch}
+                      onClose={() => setEditor(undefined)}
+                    />
+                  ) : (
+                    <LegCard
+                      leg={leg}
+                      override={overrideForLeg(trip.hopOverrides, leg.id)}
+                      derived
+                      selected={selectedLegId === leg.id}
+                      onSelect={() =>
+                        onSelectLeg(selectedLegId === leg.id ? undefined : leg.id)
+                      }
+                      onEdit={() => setEditor({ kind: "hop", legId: leg.id })}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
 
             <DestinationCard
               destination={destination}
