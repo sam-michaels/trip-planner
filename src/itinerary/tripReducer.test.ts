@@ -30,7 +30,7 @@ import type {
   RouteMap,
   Trip,
 } from "../model/trip";
-import { coords, deriveLegs, hopId } from "../model/trip";
+import { coords, deriveLegs, hopId, nightsInStay, totalByCurrency } from "../model/trip";
 import { hopIdOfLeg, tripReducer, type TripState } from "./tripReducer";
 
 // ---------- Fixtures ----------
@@ -714,5 +714,295 @@ describe("a real RouteMap changes nothing about the reducer", () => {
       deriveLegs(edited.trip, routes, guess).find((leg) => leg.id === airportBus)
         ?.bookingRef,
     ).toBe("AB-1");
+  });
+});
+
+// ---------- Stays and activities ----------
+//
+// From the onboarding popup: shortlisting a hotel or a sight for a city
+// before any dates exist. `add-stay`/`add-activity` are additive, like
+// `add-destination`, so no undo; `remove-stay`/`remove-activity` discard a
+// row's type/category, like `remove-destination` discards a destination's
+// nights and notes, so both offer one.
+
+const HOTEL = place("hotel", "Lisbon", -9.1393, 38.7223);
+const SIGHT = place("sight", "Lisbon", -9.1393, 38.7223);
+
+describe("nightsInStay", () => {
+  it("is 0 with no checkIn", () => {
+    expect(
+      nightsInStay({
+        id: "s",
+        place: HOTEL,
+        type: "hotel",
+        status: "idea",
+        checkOut: "2026-09-16",
+      }),
+    ).toBe(0);
+  });
+
+  it("is 0 with no checkOut", () => {
+    expect(
+      nightsInStay({
+        id: "s",
+        place: HOTEL,
+        type: "hotel",
+        status: "idea",
+        checkIn: "2026-09-12",
+      }),
+    ).toBe(0);
+  });
+
+  it("is 0 with neither date — a shortlisted stay", () => {
+    expect(
+      nightsInStay({ id: "s", place: HOTEL, type: "hotel", status: "idea" }),
+    ).toBe(0);
+  });
+
+  it("still counts correctly once both dates are known", () => {
+    expect(
+      nightsInStay({
+        id: "s",
+        place: HOTEL,
+        type: "hotel",
+        status: "idea",
+        checkIn: "2026-09-12",
+        checkOut: "2026-09-16",
+      }),
+    ).toBe(4);
+  });
+});
+
+describe("totalByCurrency with a dateless stay", () => {
+  it("does not crash and does not add lodging cost for a shortlisted stay", () => {
+    const t = trip([destination("a", LISBON)]);
+    t.stays.push({
+      id: "s",
+      place: HOTEL,
+      type: "hotel",
+      status: "idea",
+      costPerNight: { amount: 100, currency: "EUR" },
+    });
+
+    // The EUR key still appears — `totalByCurrency` doesn't special-case a
+    // zero multiplier — but at 0 it's the "contributes nothing yet" the
+    // 0-nights convention promises, not a phantom night added to the bill.
+    expect(() => totalByCurrency(t, [])).not.toThrow();
+    expect(totalByCurrency(t, [])).toEqual({ EUR: 0 });
+  });
+});
+
+describe("add-stay", () => {
+  it("appends one stay with status idea and no dates", () => {
+    const next = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-stay",
+      place: HOTEL,
+      stayType: "hotel",
+    });
+
+    expect(next.trip.stays).toHaveLength(1);
+    expect(next.trip.stays[0]).toMatchObject({
+      place: HOTEL,
+      type: "hotel",
+      status: "idea",
+    });
+    expect(next.trip.stays[0].checkIn).toBeUndefined();
+    expect(next.trip.stays[0].checkOut).toBeUndefined();
+  });
+
+  it("does not duplicate a place added twice", () => {
+    const once = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-stay",
+      place: HOTEL,
+      stayType: "hotel",
+    });
+    const twice = tripReducer(once, {
+      type: "add-stay",
+      place: HOTEL,
+      stayType: "hotel",
+    });
+
+    expect(twice.trip.stays).toHaveLength(1);
+  });
+
+  it("offers no undo — nothing destructive happened", () => {
+    const next = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-stay",
+      place: HOTEL,
+      stayType: "hotel",
+    });
+    expect(next.undo).toBeUndefined();
+  });
+});
+
+describe("add-activity", () => {
+  it("appends one activity with source openstreetmap and name from the place", () => {
+    const next = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-activity",
+      place: SIGHT,
+      category: "sight",
+    });
+
+    expect(next.trip.activities).toHaveLength(1);
+    expect(next.trip.activities[0]).toMatchObject({
+      place: SIGHT,
+      name: SIGHT.name,
+      category: "sight",
+      source: "openstreetmap",
+    });
+  });
+
+  it("does not duplicate a place added twice", () => {
+    const once = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-activity",
+      place: SIGHT,
+      category: "sight",
+    });
+    const twice = tripReducer(once, {
+      type: "add-activity",
+      place: SIGHT,
+      category: "sight",
+    });
+
+    expect(twice.trip.activities).toHaveLength(1);
+  });
+});
+
+describe("remove-stay", () => {
+  const HOTEL_A = place("hotel-a", "Lisbon", -9.1393, 38.7223);
+  const HOTEL_B = place("hotel-b", "Porto", -8.6291, 41.1579);
+
+  const withTwo = () => {
+    const withA = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-stay",
+      place: HOTEL_A,
+      stayType: "hotel",
+    });
+    return tripReducer(withA, {
+      type: "add-stay",
+      place: HOTEL_B,
+      stayType: "hostel",
+    });
+  };
+
+  it("removes exactly the matching stay and leaves the other", () => {
+    const state = withTwo();
+    const stayId = state.trip.stays[0].id;
+
+    const next = tripReducer(state, { type: "remove-stay", stayId });
+
+    expect(next.trip.stays).toHaveLength(1);
+    expect(next.trip.stays[0].place.id).toBe("hotel-b");
+  });
+
+  it("is a no-op for an unknown id", () => {
+    const state = withTwo();
+    expect(tripReducer(state, { type: "remove-stay", stayId: "zz" })).toBe(state);
+  });
+
+  it("offers an undo, like remove-destination", () => {
+    const state = withTwo();
+    const stayId = state.trip.stays[0].id;
+    const next = tripReducer(state, { type: "remove-stay", stayId });
+
+    expect(next.undo?.note).toBeTruthy();
+    expect(tripReducer(next, { type: "undo" }).trip).toBe(state.trip);
+  });
+
+  it("names the hotel in the undo note, not the city it is in", () => {
+    // The `place` fixture above sets `name` to the city, so it cannot
+    // tell those two apart — and a real stay never looks like that.
+    // A hotel is "Hotel Ritz" IN "Lisbon", and a toast reading
+    // "Removed Lisbon." claims the destination went, not the room.
+    const ritz: Place = {
+      id: "hotel-ritz",
+      name: "Hotel Ritz",
+      city: "Lisbon",
+      country: "PT",
+      coords: coords(-9.1553, 38.7256),
+    };
+
+    const state = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-stay",
+      place: ritz,
+      stayType: "hotel",
+    });
+    const next = tripReducer(state, {
+      type: "remove-stay",
+      stayId: state.trip.stays[0].id,
+    });
+
+    expect(next.undo?.note).toContain("Hotel Ritz");
+    expect(next.undo?.note).not.toContain("Lisbon");
+  });
+
+  it("lets the same place be re-added after removal — the dedupe guard is not permanent", () => {
+    const state = withTwo();
+    const stayId = state.trip.stays[0].id;
+    const removed = tripReducer(state, { type: "remove-stay", stayId });
+    const readded = tripReducer(removed, {
+      type: "add-stay",
+      place: HOTEL_A,
+      stayType: "hotel",
+    });
+
+    expect(readded.trip.stays.map((s) => s.place.id).sort()).toEqual([
+      "hotel-a",
+      "hotel-b",
+    ]);
+  });
+});
+
+describe("remove-activity", () => {
+  const SIGHT_A = place("sight-a", "Lisbon", -9.1393, 38.7223);
+  const SIGHT_B = place("sight-b", "Porto", -8.6291, 41.1579);
+
+  const withTwo = () => {
+    const withA = tripReducer(stateOf(trip([destination("a", LISBON)])), {
+      type: "add-activity",
+      place: SIGHT_A,
+      category: "sight",
+    });
+    return tripReducer(withA, {
+      type: "add-activity",
+      place: SIGHT_B,
+      category: "food",
+    });
+  };
+
+  it("removes exactly the matching activity and leaves the other", () => {
+    const state = withTwo();
+    const activityId = state.trip.activities[0].id;
+
+    const next = tripReducer(state, { type: "remove-activity", activityId });
+
+    expect(next.trip.activities).toHaveLength(1);
+    expect(next.trip.activities[0].place.id).toBe("sight-b");
+  });
+
+  it("is a no-op for an unknown id and does not throw", () => {
+    const state = withTwo();
+    expect(() =>
+      tripReducer(state, { type: "remove-activity", activityId: "zz" }),
+    ).not.toThrow();
+    expect(tripReducer(state, { type: "remove-activity", activityId: "zz" })).toBe(
+      state,
+    );
+  });
+
+  it("lets the same place be re-added after removal", () => {
+    const state = withTwo();
+    const activityId = state.trip.activities[0].id;
+    const removed = tripReducer(state, { type: "remove-activity", activityId });
+    const readded = tripReducer(removed, {
+      type: "add-activity",
+      place: SIGHT_A,
+      category: "sight",
+    });
+
+    expect(readded.trip.activities.map((a) => a.place.id).sort()).toEqual([
+      "sight-a",
+      "sight-b",
+    ]);
   });
 });

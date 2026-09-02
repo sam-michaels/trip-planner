@@ -15,6 +15,8 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import type { HopId, Place, TransportMode } from "../model/trip";
 import type { RouteOption } from "../lib/routing";
+import type { ActivitySuggestion, StaySuggestion } from "../lib/poiApi";
+import { nearbyActivities, nearbyStays } from "../lib/poiApi";
 import { AccessRow } from "./AccessRow";
 import {
   detectHomeLocation as detectHomeLocationReal,
@@ -22,9 +24,63 @@ import {
 } from "../lib/homeLocation";
 import { DestinationPicker } from "../itinerary/DestinationPicker";
 import { PlacePicker } from "../itinerary/PlacePicker";
+import { SuggestionStep } from "./SuggestionStep";
 
 /** PlacePicker's `knownPlaces` — there's no trip yet to draw from. */
 const NO_PLACES: Place[] = [];
+
+/** Nothing ticked, for a caller that isn't wiring these steps up. */
+const NOTHING_CHOSEN: ReadonlySet<string> = new Set();
+
+/**
+ * Module-level so their identity is stable — `SuggestionStep` keys its
+ * fetch effect on the loader, and one defined inline would re-run it
+ * on every render of the dialog.
+ *
+ * WHY THE FALLBACK RATHER THAN A TOGGLE. Lodging within a 10-minute
+ * walk of a station is the useful default: it's the difference between
+ * arriving and being there. But plenty of cities worth visiting have
+ * no `railway=station` node at all, and in those the filter returns
+ * nothing — a control the traveller has to discover and flip to
+ * escape an empty list is a worse answer than widening on their
+ * behalf and saying nothing about it. The second request only happens
+ * when the first found nothing, so the common path is unchanged.
+ */
+async function loadStays(city: Place, signal: AbortSignal) {
+  const nearStation = await nearbyStays(city, { nearStation: true, signal });
+  return nearStation.length > 0
+    ? nearStation
+    : nearbyStays(city, { signal });
+}
+
+/**
+ * City-scale only this pass. `nearbyActivities` takes the 30–120km
+ * `radiusKm` a day trip would want, but asking "and where would you
+ * go for the day?" is a sixth question at the end of an onboarding
+ * that is already five, so it waits for a surface that isn't a modal.
+ */
+function loadActivities(city: Place, signal: AbortSignal) {
+  return nearbyActivities(city, { signal });
+}
+
+/** The model's own words, which is what the chip should say. */
+const STAY_NOTES: Record<StaySuggestion["type"], string> = {
+  hotel: "Hotel",
+  hostel: "Hostel",
+  airbnb: "Airbnb",
+  friend: "Staying with friends",
+  "overnight-transit": "Overnight transit",
+};
+
+const ACTIVITY_NOTES: Record<ActivitySuggestion["category"], string> = {
+  sight: "Sight",
+  museum: "Museum",
+  food: "Food",
+  outdoor: "Outdoors",
+  nightlife: "Nightlife",
+  shopping: "Shopping",
+  other: "Other",
+};
 
 /**
  * The three `HomeLocationResult` kinds worth an explicit "try again"
@@ -40,6 +96,15 @@ const RETRYABLE_KINDS: ReadonlySet<HomeLocationResult["kind"]> = new Set([
 ]);
 
 type Detection = { kind: "idle" } | { kind: "detecting" } | HomeLocationResult;
+
+/**
+ * The screens, in order. A union rather than a number so that adding
+ * one is a type error everywhere it needs to be handled — `HEADINGS`
+ * and `BLURBS` are `Record<Step, string>` for exactly that reason.
+ */
+type Step = 1 | 2 | 3 | 4 | 5;
+
+const LAST_STEP = 5 satisfies Step;
 
 interface WelcomeProps {
   open: boolean;
@@ -58,8 +123,21 @@ interface WelcomeProps {
   accessMode?: TransportMode;
   onPickAccessMode?: (hop: HopId, mode: TransportMode) => void;
   onPickRoute?: (optionId: string) => void;
+  /**
+   * Place ids of the stays and activities already on the trip, so
+   * stepping back to a screen shows what was ticked on it. Place ids
+   * rather than `Stay.id`/`Activity.id` because the place is the only
+   * identity the popup has — the trip mints the rest.
+   */
+  chosenStayIds?: ReadonlySet<string>;
+  chosenActivityIds?: ReadonlySet<string>;
+  onToggleStay?: (item: StaySuggestion, add: boolean) => void;
+  onToggleActivity?: (item: ActivitySuggestion, add: boolean) => void;
   /** Injected so tests never touch real geolocation. Defaults to the real one. */
   detectLocation?: () => Promise<HomeLocationResult>;
+  /** Injected so tests never touch Overpass. Default to the real ones. */
+  loadStaySuggestions?: (city: Place, signal: AbortSignal) => Promise<readonly StaySuggestion[]>;
+  loadActivitySuggestions?: (city: Place, signal: AbortSignal) => Promise<readonly ActivitySuggestion[]>;
 }
 
 export function Welcome({
@@ -72,7 +150,13 @@ export function Welcome({
   accessMode,
   onPickAccessMode,
   onPickRoute,
+  chosenStayIds = NOTHING_CHOSEN,
+  chosenActivityIds = NOTHING_CHOSEN,
+  onToggleStay,
+  onToggleActivity,
   detectLocation = detectHomeLocationReal,
+  loadStaySuggestions = loadStays,
+  loadActivitySuggestions = loadActivities,
 }: WelcomeProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Set right before WE call dialog.close(), so the `close` handler
@@ -81,8 +165,11 @@ export function Welcome({
   const suppressCloseRef = useRef(false);
   const headingId = useId();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<Step>(1);
   const [origin, setOrigin] = useState<Place>();
+  // Steps 4 and 5 search around it, so the popup keeps the place it
+  // just handed to the trip rather than reading it back out.
+  const [destination, setDestination] = useState<Place>();
   const [detection, setDetection] = useState<Detection>({ kind: "idle" });
 
   // Step 3 has something to ask exactly when the trip starts with a
@@ -107,6 +194,7 @@ export function Welcome({
   }
 
   function chooseDestination(place: Place) {
+    setDestination(place);
     onDestination(place);
     // Step 3 asks how you reach the gateway — a question that only
     // exists if there IS a gateway, which the engine hasn't answered
@@ -150,6 +238,7 @@ export function Welcome({
       if (!dialog.open) dialog.showModal();
       setStep(1);
       setOrigin(undefined);
+      setDestination(undefined);
       setDetection({ kind: "idle" });
     } else if (dialog.open) {
       suppressCloseRef.current = true;
@@ -181,13 +270,17 @@ export function Welcome({
       className="m-auto w-full max-w-md rounded-xl border border-bark-200 bg-parchment p-4 text-bark-900 shadow-lg backdrop:bg-bark-900/50"
     >
       {/*
-        Always three, because there are always three screens: the
-        third is the one you leave from, and it carries the airport
-        question only when there is one to ask. Making the total
+        Always five, because there are always five screens. Three of
+        them decide for themselves whether they have anything to ask —
+        the airport question when you fly from your own city, either
+        suggestion list when the search comes back empty — and each
+        says so in a line rather than vanishing. Making the total
         conditional produced "Step 3 of 2" on the direct-service path,
         which is the counter calling itself a liar.
       */}
-      <p className="text-micro uppercase text-bark-600">Step {step} of 3</p>
+      <p className="text-micro uppercase text-bark-600">
+        Step {step} of {LAST_STEP}
+      </p>
       <h2 id={headingId} className="mt-0.5 text-title font-semibold text-bark-900">
         {HEADINGS[step]}
       </h2>
@@ -234,9 +327,21 @@ export function Welcome({
 
             <DetectionNote detection={detection} onRetry={runDetection} />
           </div>
-        ) : step === 3 ? (
+        ) : step === 2 ? (
+          <DestinationPicker
+            onSelect={chooseDestination}
+            knownPlaces={origin ? [origin] : NO_PLACES}
+            label="Where to next?"
+            autoFocus
+          />
+        ) : (
+          // Steps 3, 4 and 5 are the same shape: a question that may
+          // turn out to have nothing to ask, and the way onward. They
+          // share a branch because they share that structure — and
+          // because the button below has to exist on all three
+          // regardless of what the question decided.
           <div className="space-y-3">
-            {showsAccess && origin && (
+            {step === 3 && showsAccess && origin && (
               <AccessRow
                 from={origin}
                 options={firstLegOptions ?? []}
@@ -247,28 +352,47 @@ export function Welcome({
               />
             )}
 
+            {step === 4 && destination && (
+              <SuggestionStep
+                city={destination}
+                load={loadStaySuggestions}
+                noteOf={(item) => STAY_NOTES[item.type]}
+                chosen={chosenStayIds}
+                onToggle={onToggleStay ?? (() => {})}
+                emptyNote={`No hotels or hostels listed near ${destination.city} — you can add one yourself later.`}
+                groupLabel={`Places to stay in ${destination.city}`}
+              />
+            )}
+
+            {step === 5 && destination && (
+              <SuggestionStep
+                city={destination}
+                load={loadActivitySuggestions}
+                noteOf={(item) => ACTIVITY_NOTES[item.category]}
+                chosen={chosenActivityIds}
+                onToggle={onToggleActivity ?? (() => {})}
+                emptyNote={`Nothing listed around ${destination.city} yet — you can add your own later.`}
+                groupLabel={`Things to do in ${destination.city}`}
+              />
+            )}
+
             {/*
-              Always the way out, whether or not there was a third
-              question — a dialog you cannot dismiss is a trap, and
-              this is the only affordance that closes it deliberately
-              rather than by Escape.
+              Always the way out, whether or not the step above found a
+              question to ask — a dialog you cannot dismiss is a trap,
+              and this is the only affordance that closes it
+              deliberately rather than by Escape.
             */}
             <button
               type="button"
-              onClick={onDone}
+              onClick={() =>
+                step === LAST_STEP ? onDone() : setStep((step + 1) as Step)
+              }
               autoFocus
               className="w-full rounded-lg bg-moss-600 px-3 py-2 text-body font-semibold text-parchment transition hover:bg-moss-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
             >
-              Start planning
+              {step === LAST_STEP ? "Start planning" : "Next"}
             </button>
           </div>
-        ) : (
-          <DestinationPicker
-            onSelect={chooseDestination}
-            knownPlaces={origin ? [origin] : NO_PLACES}
-            label="Where to next?"
-            autoFocus
-          />
         )}
       </div>
     </dialog>
@@ -330,19 +454,23 @@ function messageFor(detection: HomeLocationResult): string {
   }
 }
 
-const HEADINGS: Record<1 | 2 | 3, string> = {
+const HEADINGS: Record<Step, string> = {
   1: "Where are you starting from?",
   2: "Where do you want to go?",
-  3: "Ready when you are",
+  3: "Getting under way",
+  4: "Where would you stay?",
+  5: "What would you do there?",
 };
 
-const BLURBS: Record<1 | 2 | 3, string> = {
+const BLURBS: Record<Step, string> = {
   1: "We'll use this as the trip's starting point.",
   2: "Pick a city, or browse the list below.",
   3: "You can change any of this later.",
+  4: "Tick anything that appeals — no dates, no booking, just a shortlist.",
+  5: "Same idea: ideas to hang the trip on, not a schedule.",
 };
 
-function statusFor(step: 1 | 2 | 3, detection: Detection): string {
+function statusFor(step: Step, detection: Detection): string {
   if (detection.kind === "detecting") return "Looking for your starting point…";
   if (detection.kind !== "idle" && detection.kind !== "found") {
     return messageFor(detection);

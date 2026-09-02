@@ -119,6 +119,26 @@ function legs0Mode(trip: Trip, proposals: readonly RouteOption[]) {
   );
 }
 
+/** The set of places a list of stays or activities is sitting on. */
+function placeIds(rows: readonly { place: { id: string } }[]): ReadonlySet<string> {
+  return new Set(rows.map((row) => row.place.id));
+}
+
+/**
+ * Every row for one place, dispatched over.
+ *
+ * Plural because the reducer's add-guard is the only thing keeping a
+ * place to one row, and an untick that removed the first match would
+ * quietly leave a second behind if that guard ever slipped.
+ */
+function forEachMatch<T extends { place: { id: string } }>(
+  rows: readonly T[],
+  placeId: string,
+  remove: (row: T) => void,
+) {
+  for (const row of rows) if (row.place.id === placeId) remove(row);
+}
+
 function App() {
   // `TripState` holds only `trip` and an optional `undo` snapshot —
   // legs are never state (see the banner on `tripReducer.ts`), so
@@ -165,6 +185,15 @@ function App() {
     routeOptions,
   ]);
 
+  // What the popup's last two steps show as ticked. Derived from the
+  // trip rather than tracked alongside it — the trip is the answer to
+  // "is this on my list", and a second copy would be a second answer.
+  const stayPlaceIds = useMemo(() => placeIds(trip.stays), [trip.stays]);
+  const activityPlaceIds = useMemo(
+    () => placeIds(trip.activities),
+    [trip.activities],
+  );
+
   return (
     <div className="flex h-screen flex-col bg-bark-100 text-bark-800">
       {/*
@@ -194,6 +223,33 @@ function App() {
         onPickRoute={(optionId) =>
           firstLeg &&
           setChosenRoutes((chosen) => ({ ...chosen, [firstLeg.pair]: optionId }))
+        }
+        chosenStayIds={stayPlaceIds}
+        chosenActivityIds={activityPlaceIds}
+        // The popup knows a place; the trip knows a `Stay`. Untick has
+        // to cross that gap, which is why removal looks up the row
+        // rather than being handed an id the popup never had.
+        onToggleStay={(item, add) =>
+          add
+            ? dispatch({
+                type: "add-stay",
+                place: item.place,
+                stayType: item.type,
+              })
+            : forEachMatch(trip.stays, item.place.id, (stay) =>
+                dispatch({ type: "remove-stay", stayId: stay.id }),
+              )
+        }
+        onToggleActivity={(item, add) =>
+          add
+            ? dispatch({
+                type: "add-activity",
+                place: item.place,
+                category: item.category,
+              })
+            : forEachMatch(trip.activities, item.place.id, (activity) =>
+                dispatch({ type: "remove-activity", activityId: activity.id }),
+              )
         }
       />
 

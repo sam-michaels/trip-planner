@@ -153,9 +153,17 @@ export type StayType =
 export interface Stay {
   id: string;
   place: Place;
-  /** ISO dates, YYYY-MM-DD */
-  checkIn: string;
-  checkOut: string;
+  /**
+   * ISO dates, YYYY-MM-DD.
+   *
+   * Optional for the same reason `Destination.nights` and
+   * `Destination.arrival` are: the onboarding popup lets you shortlist a
+   * hotel for a city before any dates exist, and a placeholder date would
+   * just be a lie stored as data (the same argument that made
+   * `Trip.origin` optional). A stay with no dates is a shortlisted stay.
+   */
+  checkIn?: string;
+  checkOut?: string;
   type: StayType;
   /** Per night, so the total recomputes if you shift dates */
   costPerNight?: Money;
@@ -185,7 +193,7 @@ export interface Activity {
   durationMinutes?: number;
   cost?: Money;
   /** Where the suggestion came from, so you can trust it appropriately */
-  source?: "manual" | "opentripmap" | "google-places" | "ai-suggestion";
+  source?: "manual" | "opentripmap" | "google-places" | "ai-suggestion" | "openstreetmap";
   notes?: string;
 }
 
@@ -582,7 +590,17 @@ export function deriveLegs(
   return legs;
 }
 
+/**
+ * Returns 0, never `undefined`, when either date is missing.
+ *
+ * WHY 0 AND NOT "UNKNOWN": this feeds `totalByCurrency()` below, multiplying
+ * `costPerNight`. A shortlisted stay of unknown length honestly contributes
+ * nothing to the estimate yet — the alternative, propagating `undefined`
+ * through a cost total, would force every caller to decide what "unknown
+ * nights" means for a number that's about to be summed and displayed.
+ */
 export function nightsInStay(stay: Stay): number {
+  if (!stay.checkIn || !stay.checkOut) return 0;
   const ms =
     new Date(stay.checkOut).getTime() - new Date(stay.checkIn).getTime();
   return Math.max(0, Math.round(ms / 86_400_000));

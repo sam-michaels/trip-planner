@@ -43,11 +43,15 @@
 // ============================================================
 
 import type {
+  Activity,
+  ActivityCategory,
   Destination,
   HopId,
   HopOverride,
   Place,
   PlanStatus,
+  Stay,
+  StayType,
   Trip,
 } from "../model/trip";
 
@@ -172,6 +176,28 @@ export type TripAction =
    * With `fields`, only those; without, the whole override.
    */
   | { type: "clear-hop-override"; hop: string; fields?: (keyof HopOverride)[] }
+  /**
+   * From the onboarding popup, where checking a box means "shortlist
+   * this", not "book this" — so both land unscheduled: `add-stay` with
+   * no dates (see `Stay.checkIn`/`checkOut`) and `status: "idea"`,
+   * `add-activity` with no `date`. Neither is undoable, on the same
+   * reasoning as `add-destination`: nothing destructive happened, so
+   * there is nothing the undo slot needs to protect.
+   */
+  | { type: "add-stay"; place: Place; stayType: StayType }
+  | { type: "add-activity"; place: Place; category: ActivityCategory }
+  /**
+   * `Trip.stays` and `Trip.activities` are currently read by no component
+   * in the app — the onboarding popup is about to become the only
+   * surface that writes them. Without a remove, a mis-clicked hotel
+   * during onboarding would be unremovable for the life of the trip:
+   * there is no other screen to take it off. Add is only half a control.
+   * Undoable, like `remove-destination`, for the same reason: it
+   * discards something the row held (its type/category and any notes a
+   * later editor adds) that isn't visible once it's gone.
+   */
+  | { type: "remove-stay"; stayId: string }
+  | { type: "remove-activity"; activityId: string }
   | { type: "undo" }
   | { type: "dismiss-undo" };
 
@@ -304,6 +330,84 @@ export function tripReducer(state: TripState, action: TripAction): TripState {
           hopOverrides: writeOverride(state.trip.hopOverrides, hop, next),
         },
         "Reset that hop to the route engine's suggestion.",
+      );
+    }
+
+    case "add-stay": {
+      // A traveller double-clicking the shortlist checkbox shouldn't end
+      // up with two hotels for the same place — guard on `place.id`
+      // rather than trusting the caller never to double-dispatch.
+      if (state.trip.stays.some((stay) => stay.place.id === action.place.id)) {
+        return state;
+      }
+
+      const stay: Stay = {
+        id: newId("stay"),
+        place: action.place,
+        type: action.stayType,
+        status: "idea",
+      };
+      return edit(state, { ...state.trip, stays: [...state.trip.stays, stay] });
+    }
+
+    case "add-activity": {
+      if (
+        state.trip.activities.some(
+          (activity) => activity.place.id === action.place.id,
+        )
+      ) {
+        return state;
+      }
+
+      const activity: Activity = {
+        id: newId("activity"),
+        place: action.place,
+        name: action.place.name,
+        category: action.category,
+        // The actual source is OpenStreetMap via the Overpass API — this
+        // field exists so the user can judge how much to trust a
+        // suggestion, so it has to name the real provenance.
+        source: "openstreetmap",
+      };
+      return edit(state, {
+        ...state.trip,
+        activities: [...state.trip.activities, activity],
+      });
+    }
+
+    case "remove-stay": {
+      const removed = state.trip.stays.find((stay) => stay.id === action.stayId);
+      if (!removed) return state;
+
+      return edit(
+        state,
+        {
+          ...state.trip,
+          stays: state.trip.stays.filter((stay) => stay.id !== action.stayId),
+        },
+        // The hotel's name, not its city. A `Stay` has no `name` of its
+        // own, and reaching for `place.city` instead turns "Removed
+        // Hotel Ritz." into "Removed Lisbon." — which reads like the
+        // destination just went, not the shortlisted room in it.
+        `Removed ${removed.place.name}.`,
+      );
+    }
+
+    case "remove-activity": {
+      const removed = state.trip.activities.find(
+        (activity) => activity.id === action.activityId,
+      );
+      if (!removed) return state;
+
+      return edit(
+        state,
+        {
+          ...state.trip,
+          activities: state.trip.activities.filter(
+            (activity) => activity.id !== action.activityId,
+          ),
+        },
+        `Removed ${removed.name}.`,
       );
     }
 
