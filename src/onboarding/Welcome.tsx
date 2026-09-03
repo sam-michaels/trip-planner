@@ -40,20 +40,15 @@ const NOTHING_CHOSEN: ReadonlySet<string> = new Set();
  * fetch effect on the loader, and one defined inline would re-run it
  * on every render of the dialog.
  *
- * WHY THE FALLBACK RATHER THAN A TOGGLE. Lodging within a 10-minute
- * walk of a station is the useful default: it's the difference between
- * arriving and being there. But plenty of cities worth visiting have
- * no `railway=station` node at all, and in those the filter returns
- * nothing — a control the traveller has to discover and flip to
- * escape an empty list is a worse answer than widening on their
- * behalf and saying nothing about it. The second request only happens
- * when the first found nothing, so the common path is unchanged.
+ * `loadStays` used to widen its search when a station-filtered first
+ * pass came back empty, which meant up to three sequential Overpass
+ * round trips before the step could render anything. `nearbyStays` no
+ * longer filters by station (see its own doc for why that bought
+ * nothing), so there is no first pass to fall back from and this is a
+ * plain adapter onto the one query.
  */
-async function loadStays(city: Place, signal: AbortSignal) {
-  const nearStation = await nearbyStays(city, { nearStation: true, signal });
-  return nearStation.length > 0
-    ? nearStation
-    : nearbyStays(city, { signal });
+function loadStays(city: Place, signal: AbortSignal) {
+  return nearbyStays(city, { signal });
 }
 
 /**

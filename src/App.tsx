@@ -22,7 +22,7 @@ import { deriveLegs, emptyTrip, hopId, tripPlaces } from "./model/trip";
 import { Welcome } from "./onboarding/Welcome";
 import { newId } from "./itinerary/tripReducer";
 import type { RouteOption, RouteOptionMap } from "./lib/routing";
-import { pickRoutes, proposeTripRoutes } from "./lib/routing";
+import { accessPair, pickRoutes, proposeTripRoutes } from "./lib/routing";
 
 /**
  * What the itinerary looks like before the engine has answered.
@@ -105,17 +105,29 @@ function firstLegChoice(trip: Trip, options: RouteOptionMap) {
   // The access hop's mode as it stands — the engine's guess unless the
   // traveller has already overridden it, which is what the row shows
   // as selected.
-  const accessMode = legs0Mode(trip, proposals);
+  const accessMode = currentAccessMode(trip, proposals);
 
   return { pair, options: proposals, accessMode };
 }
 
-/** The mode currently in effect on the first hop of the first proposal. */
-function legs0Mode(trip: Trip, proposals: readonly RouteOption[]) {
-  const first = proposals[0]?.hops[0];
-  if (!first) return undefined;
+/**
+ * The mode currently in effect on the hop `AccessRow` writes to.
+ *
+ * VIA `accessPair`, NOT `proposals[0]`, AND THAT IS THE WHOLE POINT.
+ * This used to read the first hop of the first proposal, while the row
+ * picked its hop by shape — and `proposeRoutes` returns
+ * `[...ground, ...air]` for a land-connected pair between 700km and
+ * 1000km, so the first proposal there is the direct ground option
+ * while the row is rendering the airport transfer further down the
+ * list. The read and the write landed on different hops and the radio
+ * could never show itself as checked. Same function on both sides now,
+ * so they cannot drift apart again.
+ */
+function currentAccessMode(trip: Trip, proposals: readonly RouteOption[]) {
+  const access = accessPair(proposals)?.overland.hops[0];
+  if (!access) return undefined;
   return (
-    trip.hopOverrides[hopId(first.from, first.to)]?.mode ?? first.mode
+    trip.hopOverrides[hopId(access.from, access.to)]?.mode ?? access.mode
   );
 }
 

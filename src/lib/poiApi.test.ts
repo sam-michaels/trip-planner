@@ -192,3 +192,48 @@ describe("toActivitySuggestions", () => {
     expect(toActivitySuggestions([el], lisbon)).toEqual([]);
   });
 });
+
+describe("tag lookup is not a prototype walk", () => {
+  // OSM tag values are arbitrary strings from a public, editable
+  // database, so the lookup table is indexed with untrusted input.
+  // `STAY_TAGS` was a plain object, and every one of these names
+  // resolves on `Object.prototype` to something truthy — which sailed
+  // past the "unmapped, drop it" guard and produced a row whose `type`
+  // was a function, rendering a blank chip.
+  for (const value of ["constructor", "toString", "valueOf", "hasOwnProperty"]) {
+    it(`drops tourism=${value} rather than inheriting it`, () => {
+      const el: OverpassElement = {
+        type: "node",
+        id: 99,
+        lat: 38.71,
+        lon: -9.14,
+        tags: { name: "Not A Hotel", tourism: value },
+      };
+
+      expect(toStaySuggestions([el], lisbon)).toEqual([]);
+    });
+  }
+});
+
+describe("relations", () => {
+  // The converters are type-agnostic and must stay that way even though
+  // the query builders currently ask for nodes and ways only — asking
+  // for relations too costs half again as many index lookups per clause
+  // (see poiApi.ts's measurement table), and that trade could reverse
+  // on a faster Overpass instance. The conversion side should not have
+  // to change if it does.
+  it("converts a relation via its center, like a way", () => {
+    const el: OverpassElement = {
+      type: "relation",
+      id: 7,
+      center: { lat: 38.73, lon: -9.16 },
+      tags: { name: "Parque Eduardo VII", leisure: "park" },
+    };
+
+    const [suggestion] = toActivitySuggestions([el], lisbon);
+
+    expect(suggestion.category).toBe("outdoor");
+    expect(suggestion.place.id).toBe("osm-relation-7");
+    expect(suggestion.place.coords).toEqual([-9.16, 38.73]);
+  });
+});

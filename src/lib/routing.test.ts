@@ -31,6 +31,7 @@ import {
 import { defaultMode } from "../itinerary/plausibleModes";
 import { distanceKm } from "./geo";
 import {
+  accessOptions,
   buildRouteMap,
   pickRoutes,
   proposeRoutes,
@@ -686,5 +687,49 @@ describe("pickRoutes", () => {
     });
 
     expect(routes.get(hopId(LISBON, PORTO))?.[0].mode).toBe("train");
+  });
+});
+
+describe("accessOptions — how long the transfer takes", () => {
+  // Two points about 11km apart, which is an ordinary run to a city's
+  // own airport rather than a journey to the next city.
+  const CITY = place("est-city", "Estimateville", "PT", -9.13, 38.72);
+  const NEARBY = place("est-airport", "Estimateville", "PT", -9.0, 38.72);
+
+  it("does not round a short hop up to 25 minutes", () => {
+    // The floor used to sit INSIDE the ×5 — `Math.max(5, blocks) * 5` —
+    // so every transfer under about 35km came back as exactly 25m
+    // regardless of distance, and the row claimed a half-hour drive to
+    // an airport eleven kilometres away.
+    const car = accessOptions(CITY, NEARBY).find((o) => o.mode === "car");
+
+    expect(car?.estimateMinutes).toBeDefined();
+    expect(car!.estimateMinutes!).toBeLessThan(25);
+    expect(car!.estimateMinutes!).toBeGreaterThanOrEqual(5);
+  });
+
+  it("still rounds to five minutes, and never returns zero", () => {
+    const samePlace = place("est-same", "Estimateville", "PT", -9.13, 38.72);
+
+    // Only the modes that HAVE a speed: `estimateMinutes` returns
+    // undefined for anything missing from `MODE_KMH`, which is the
+    // honest answer for a mode this engine can't time, and asserting
+    // over it would be testing the wrong thing.
+    const timed = (from: Place, to: Place) =>
+      accessOptions(from, to)
+        .map((option) => option.estimateMinutes)
+        .filter((minutes): minutes is number => minutes !== undefined);
+
+    const zeroDistance = timed(CITY, samePlace);
+    expect(zeroDistance.length).toBeGreaterThan(0);
+    for (const minutes of zeroDistance) {
+      // A zero-distance transfer is still floored at the smallest
+      // honest answer rather than claiming to be instantaneous.
+      expect(minutes).toBe(5);
+    }
+
+    for (const minutes of timed(CITY, NEARBY)) {
+      expect(minutes % 5).toBe(0);
+    }
   });
 });

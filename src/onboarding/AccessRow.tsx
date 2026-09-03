@@ -30,7 +30,7 @@
 import type { HopId, Place, TransportMode } from "../model/trip";
 import { hopId } from "../model/trip";
 import type { RouteOption } from "../lib/routing";
-import { accessOptions } from "../lib/routing";
+import { accessOptions, accessPair } from "../lib/routing";
 import { MODE_ICONS, MODE_LABELS } from "../itinerary/labels";
 
 /** One icon in the row: a mode, roughly how long, and what picking it does. */
@@ -53,46 +53,6 @@ interface AccessRowProps {
   currentMode?: TransportMode;
   onPickMode: (hop: HopId, mode: TransportMode) => void;
   onPickRoute: (optionId: string) => void;
-}
-
-/**
- * The chain whose first hop is the traveller getting themselves to an
- * airport, plus the variant — if the engine found one — that flies
- * them there instead.
- *
- * WHY NOT JUST "IS IT A GATEWAY ROUTE". That was the first version of
- * this check and it was wrong about the trip this whole feature exists
- * for. London, Ontario → Lisbon never reaches the gateway search:
- * Toronto is inside the ground-transfer radius AND flies to Lisbon, so
- * it comes out of Stage 2 as an ordinary `air-yyz-lis` pairing. But
- * "bus to Pearson, then fly" is exactly the question the traveller
- * wanted asked. The thing worth asking about is the SHAPE — a ground
- * hop to an airport in another city — not which stage produced it.
- *
- * The flown variant is matched by id prefix because `gatewayChain`
- * builds both ids from the same two airports, the flown one carrying a
- * `-via-` suffix, so the prefix IS the claim "same gateway, reached
- * differently".
- */
-function accessPair(options: readonly RouteOption[]) {
-  const overland = options.find((option) => {
-    const first = option.hops[0];
-    // A ground hop that ends at an airport, and ends somewhere other
-    // than where it started — a transfer within one city is the metro
-    // ride at the far end, not a decision anyone wants a screen for.
-    return (
-      first &&
-      first.mode !== "flight" &&
-      Boolean(first.to.iata) &&
-      first.to.city !== first.from.city
-    );
-  });
-  if (!overland) return undefined;
-
-  const flown = options.find((option) =>
-    option.id.startsWith(`${overland.id}-via-`),
-  );
-  return { overland, flown };
 }
 
 export function AccessRow({

@@ -72,9 +72,18 @@ export function SuggestionStep<T extends { place: Place }>({
     const controller = new AbortController();
     setItems(undefined);
 
-    loadRef.current(city, controller.signal).then((next) => {
-      if (!controller.signal.aborted) setItems(next);
-    });
+    loadRef.current(city, controller.signal)
+      // `load` is a public prop, and the real loaders build their query
+      // string before reaching the fetch that swallows failures — so a
+      // `Place` with bad coords rejects out here. Without this the
+      // rejection is unhandled and `setItems` never runs, which leaves
+      // the step on its spinner for good. Empty is already this
+      // component's word for "looked, found nothing"; a loader that
+      // threw found nothing too.
+      .catch(() => [])
+      .then((next) => {
+        if (!controller.signal.aborted) setItems(next);
+      });
 
     // Aborts the request as well as ignoring it: leaving the popup
     // shouldn't leave a fetch running against a public API that asks

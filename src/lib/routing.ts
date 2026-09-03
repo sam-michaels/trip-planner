@@ -620,16 +620,64 @@ function gatewayChain(
 // ---------- How you reach the gateway ----------
 
 /**
+ * The proposal whose first hop is the traveller getting themselves to
+ * an airport, plus the variant — if there is one — that flies them
+ * there instead.
+ *
+ * ONE DEFINITION OF "THE ACCESS HOP", READ BY BOTH SIDES. It lives
+ * here rather than in the row that renders it because `App` needs the
+ * same answer: the row WRITES a `HopOverride` on this hop, and the
+ * shell READS the mode back off it to show which option is checked.
+ * When those were two pieces of code they disagreed — the shell used
+ * `proposals[0].hops[0]`, and `proposeRoutes` returns
+ * `[...ground, ...air]` for a land-connected pair between
+ * `AIR_CHAIN_MIN_KM` and `AIR_CHAIN_PREFERRED_KM`, so the shell read
+ * the direct ground hop while the row wrote the airport transfer. The
+ * radio could never show itself as checked, however many times you
+ * clicked it.
+ *
+ * WHY SHAPE AND NOT "IS IT A GATEWAY ROUTE". That was the first
+ * version of this check and it was wrong about the trip the feature
+ * exists for. London, Ontario → Lisbon never reaches the gateway
+ * search: Toronto is inside the ground-transfer radius AND flies to
+ * Lisbon, so it comes out of Stage 2 as an ordinary `air-yyz-lis`
+ * pairing. But "bus to Pearson, then fly" is exactly the question
+ * worth asking. The thing to test is the SHAPE — a ground hop to an
+ * airport in another city — not which stage produced it.
+ *
+ * The flown variant is matched by id prefix because `gatewayChain`
+ * builds both ids from the same two airports, the flown one carrying a
+ * `-via-` suffix, so the prefix IS the claim "same gateway, reached
+ * differently".
+ */
+export function accessPair(options: readonly RouteOption[]) {
+  const overland = options.find((option) => {
+    const first = option.hops[0];
+    // A ground hop that ends at an airport, and ends somewhere other
+    // than where it started — a transfer within one city is the metro
+    // ride at the far end, not a decision anyone wants a screen for.
+    return (
+      first &&
+      first.mode !== "flight" &&
+      Boolean(first.to.iata) &&
+      first.to.city !== first.from.city
+    );
+  });
+  if (!overland) return undefined;
+
+  const flown = options.find((option) =>
+    option.id.startsWith(`${overland.id}-via-`),
+  );
+  return { overland, flown };
+}
+
+/**
  * Every way of getting to a gateway, for the traveller to choose between.
  *
  * The engine picks one for its own proposal; this is the same question
  * asked so a picker can offer all the answers. Deliberately no prices:
  * no free service quotes a bus fare, and an invented number is worse
  * than a blank the user can fill in from the booking site.
- *
- * NO CALLER YET, ON PURPOSE — this is what the onboarding popup's
- * transport-mode row is built on, and that row is the next thing to be
- * written. Not dead code; unlit code.
  */
 export interface AccessOption {
   mode: TransportMode;
@@ -685,7 +733,12 @@ export function accessOptions(
 function estimateMinutes(km: number, mode: TransportMode): number | undefined {
   const kmh = MODE_KMH[mode];
   if (!kmh) return undefined;
-  return Math.max(5, Math.round((km / kmh) * 12)) * 5;
+  // The floor is on the ANSWER, not on the count of five-minute blocks.
+  // `Math.max(5, …) * 5` put it inside, which made the minimum 25
+  // minutes rather than 5 — so every transfer under about 35km came
+  // back "25m" and the access row quietly claimed a half-hour drive to
+  // the airport in your own city.
+  return Math.max(5, Math.round((km / kmh) * 12) * 5);
 }
 
 /**
