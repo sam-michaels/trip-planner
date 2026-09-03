@@ -15,7 +15,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { Money, PlanStatus, TransportMode } from "../model/trip";
+import type {
+  ActivityCategory,
+  Money,
+  PlanStatus,
+  StayType,
+  TransportMode,
+} from "../model/trip";
 
 export const MODES: TransportMode[] = [
   "flight",
@@ -68,6 +74,32 @@ export const MODE_COLORS: Record<TransportMode, string> = {
   car: "#a85644", // rust
   ferry: "#5b7f9e", // slate water
   walk: "#7d8f4a", // dry olive
+};
+
+/**
+ * What a shortlisted stay or activity is called, wherever it appears.
+ *
+ * Lives here rather than beside the popup that first needed it because
+ * it is now read in two places — the onboarding suggestion chips and
+ * the destination card's shortlist — and this file exists so a label is
+ * never invented twice and drifts.
+ */
+export const STAY_LABELS: Record<StayType, string> = {
+  hotel: "Hotel",
+  hostel: "Hostel",
+  airbnb: "Airbnb",
+  friend: "Staying with friends",
+  "overnight-transit": "Overnight transit",
+};
+
+export const ACTIVITY_LABELS: Record<ActivityCategory, string> = {
+  sight: "Sight",
+  museum: "Museum",
+  food: "Food",
+  outdoor: "Outdoors",
+  nightlife: "Nightlife",
+  shopping: "Shopping",
+  other: "Other",
 };
 
 export const STATUSES: PlanStatus[] = ["idea", "planned", "booked"];

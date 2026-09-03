@@ -1,6 +1,8 @@
 // ============================================================
-// The first-run popup: two questions before the shell means
-// anything — where you're starting from, and where you want to go.
+// The first-run popup: five questions before the shell means anything
+// — where you're starting from, where you want to go, how you reach
+// the airport, where you'd stay and what you'd do there. The last
+// three each decide for themselves whether they have anything to ask.
 // See DESIGN.md's "Navigation" section (The One Modal Rule / The
 // Modal Contract Rule) for why this is the app's only dialog and
 // what it owes WCAG 2.2 AA.
@@ -25,6 +27,7 @@ import {
 import { DestinationPicker } from "../itinerary/DestinationPicker";
 import { PlacePicker } from "../itinerary/PlacePicker";
 import { SuggestionStep } from "./SuggestionStep";
+import { ACTIVITY_LABELS, STAY_LABELS } from "../itinerary/labels";
 
 /** PlacePicker's `knownPlaces` — there's no trip yet to draw from. */
 const NO_PLACES: Place[] = [];
@@ -62,25 +65,6 @@ async function loadStays(city: Place, signal: AbortSignal) {
 function loadActivities(city: Place, signal: AbortSignal) {
   return nearbyActivities(city, { signal });
 }
-
-/** The model's own words, which is what the chip should say. */
-const STAY_NOTES: Record<StaySuggestion["type"], string> = {
-  hotel: "Hotel",
-  hostel: "Hostel",
-  airbnb: "Airbnb",
-  friend: "Staying with friends",
-  "overnight-transit": "Overnight transit",
-};
-
-const ACTIVITY_NOTES: Record<ActivitySuggestion["category"], string> = {
-  sight: "Sight",
-  museum: "Museum",
-  food: "Food",
-  outdoor: "Outdoors",
-  nightlife: "Nightlife",
-  shopping: "Shopping",
-  other: "Other",
-};
 
 /**
  * The three `HomeLocationResult` kinds worth an explicit "try again"
@@ -356,7 +340,7 @@ export function Welcome({
               <SuggestionStep
                 city={destination}
                 load={loadStaySuggestions}
-                noteOf={(item) => STAY_NOTES[item.type]}
+                noteOf={(item) => STAY_LABELS[item.type]}
                 chosen={chosenStayIds}
                 onToggle={onToggleStay ?? (() => {})}
                 emptyNote={`No hotels or hostels listed near ${destination.city} — you can add one yourself later.`}
@@ -368,7 +352,7 @@ export function Welcome({
               <SuggestionStep
                 city={destination}
                 load={loadActivitySuggestions}
-                noteOf={(item) => ACTIVITY_NOTES[item.category]}
+                noteOf={(item) => ACTIVITY_LABELS[item.category]}
                 chosen={chosenActivityIds}
                 onToggle={onToggleActivity ?? (() => {})}
                 emptyNote={`Nothing listed around ${destination.city} yet — you can add your own later.`}

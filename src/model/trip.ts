@@ -607,6 +607,35 @@ export function nightsInStay(stay: Stay): number {
 }
 
 /**
+ * The stays and activities shortlisted for one destination.
+ *
+ * WHY THE CITY IS THE LINK: it is the only one that exists. `poiApi`'s
+ * converters stamp every suggestion with the searched city's `city` and
+ * `country` deliberately — Overpass does not tag those reliably on the POIs
+ * themselves — so a hotel found for Lisbon carries `city: "Lisbon"`, and that
+ * is what ties it back here. Nothing on `Stay` or `Activity` points at a
+ * `Destination`, and adding a pointer would mean maintaining it through
+ * reordering and removal for a relationship the city already expresses.
+ *
+ * ponytail: two destinations in the same city share one shortlist — visit
+ * Lisbon twice and both cards show the same hotels. Upgrade path is a
+ * `destinationId?` on `Stay`/`Activity`, written at add time by whoever
+ * dispatches; do it when returning to a city is a case someone actually hits.
+ */
+export function shortlistFor(
+  trip: Trip,
+  destination: Destination,
+): { stays: Stay[]; activities: Activity[] } {
+  const city = destination.place.city;
+  return {
+    stays: trip.stays.filter((stay) => stay.place.city === city),
+    activities: trip.activities.filter(
+      (activity) => activity.place.city === city,
+    ),
+  };
+}
+
+/**
  * Total cost, grouped by currency.
  *
  * WHY NOT ONE NUMBER: converting requires a live FX rate, which is a

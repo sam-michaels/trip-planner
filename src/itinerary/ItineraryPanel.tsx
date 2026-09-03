@@ -56,20 +56,28 @@ import { Fragment, useState } from "react";
 import type { Dispatch, DragEvent, KeyboardEvent } from "react";
 
 import type {
+  Activity,
   CurrencyCode,
   Destination,
   Leg,
   Place,
   RouteMap,
+  Stay,
 } from "../model/trip";
-import { findGaps, tripPlaces } from "../model/trip";
+import { findGaps, shortlistFor, tripPlaces } from "../model/trip";
 import { DestinationPicker } from "./DestinationPicker";
 import { HopEditor } from "./HopEditor";
 import { occurrenceCount, overrideForLeg } from "./hopOverrides";
 import { LegCard } from "./LegCard";
 import { LegConnector } from "./LegConnector";
 import { formatDateTime, fromInputValue, toInputValue } from "./datetime";
-import { STATUS_LABELS, STATUS_PILL_CLASSES, placeSubtitle } from "./labels";
+import {
+  ACTIVITY_LABELS,
+  STAY_LABELS,
+  STATUS_LABELS,
+  STATUS_PILL_CLASSES,
+  placeSubtitle,
+} from "./labels";
 import { Field, FieldGroup, StatusPicker, inputClasses, labelled } from "./fields";
 import type { DestinationPatch, TripAction, TripState } from "./tripReducer";
 import { newId } from "./tripReducer";
@@ -238,6 +246,13 @@ export function ItineraryPanel({
                 editor?.kind === "destination" &&
                 editor.destinationId === destination.id
               }
+              shortlist={shortlistFor(trip, destination)}
+              onRemoveStay={(stayId) =>
+                dispatch({ type: "remove-stay", stayId })
+              }
+              onRemoveActivity={(activityId) =>
+                dispatch({ type: "remove-activity", activityId })
+              }
               onToggleEdit={() =>
                 setEditor((current) =>
                   current?.kind === "destination" &&
@@ -307,7 +322,16 @@ export function ItineraryPanel({
             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-bark-300 px-3 py-2.5 text-body font-medium text-bark-600 transition hover:border-bark-400 hover:bg-parchment hover:text-bark-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss-500"
           >
             <Plus className="size-4" aria-hidden />
-            Add destination
+            {/*
+              A question, not a command, because the popup that just
+              closed asked one — "Where do you want to go?" — and this
+              is the same question asked again for the next city. The
+              button is otherwise untouched: it already opens
+              `DestinationPicker` and already dispatches
+              `add-destination` (a2233fd), so the plan's "open the
+              picker rather than the leg editor" was done before this.
+            */}
+            Anywhere else?
           </button>
         )}
       </div>
@@ -400,6 +424,13 @@ function collectCurrencies(legs: Leg[]): CurrencyCode[] {
 interface DestinationCardProps {
   destination: Destination;
   editing: boolean;
+  /**
+   * What's been shortlisted for this city — see `shortlistFor`, which
+   * owns the question of what "for this city" means.
+   */
+  shortlist: { stays: Stay[]; activities: Activity[] };
+  onRemoveStay: (stayId: string) => void;
+  onRemoveActivity: (activityId: string) => void;
   onToggleEdit: () => void;
   onPatch: (patch: DestinationPatch) => void;
   onRemove: () => void;
@@ -423,6 +454,9 @@ interface DestinationCardProps {
 function DestinationCard({
   destination,
   editing,
+  shortlist,
+  onRemoveStay,
+  onRemoveActivity,
   onToggleEdit,
   onPatch,
   onRemove,
@@ -520,6 +554,12 @@ function DestinationCard({
           />
         </Field>
 
+        <Shortlist
+          shortlist={shortlist}
+          onRemoveStay={onRemoveStay}
+          onRemoveActivity={onRemoveActivity}
+        />
+
         <div className="sticky bottom-0 -mx-3 -mb-3 flex items-center gap-2 rounded-b-xl border-t border-moss-200/70 bg-moss-50 px-3 py-2.5">
           <button
             type="button"
@@ -545,12 +585,19 @@ function DestinationCard({
     );
   }
 
+  // The collapsed row is one big <button>, so the shortlist can only
+  // appear here as text — anything with a remove control of its own
+  // would be an interactive element nested inside an interactive
+  // element. The count says it's there; expanding the card lists it.
+  const ideas = shortlist.stays.length + shortlist.activities.length;
+
   const meta =
     [
       destination.nights !== undefined
         ? `${destination.nights} ${destination.nights === 1 ? "night" : "nights"}`
         : undefined,
       destination.arrival ? formatDateTime(destination.arrival) : undefined,
+      ideas > 0 ? `${ideas} ${ideas === 1 ? "idea" : "ideas"}` : undefined,
     ]
       .filter(Boolean)
       .join(" · ") || "No nights or date yet";
@@ -604,5 +651,78 @@ function DestinationCard({
         </div>
       </button>
     </div>
+  );
+}
+
+/**
+ * The stays and activities shortlisted for one destination, with a way
+ * to take each one off again.
+ *
+ * ONLY IN THE EXPANDED CARD, because the collapsed row is a single
+ * <button> and a remove control inside it would be an interactive
+ * element nested in an interactive element — invalid, and unreachable
+ * by keyboard in the way that matters. The collapsed row carries the
+ * count instead; this is where you act on it.
+ *
+ * REMOVE IS THE ONLY VERB HERE. A shortlisted stay has no dates yet
+ * (see `Stay.checkIn`), and a field for one would be inventing the
+ * stays editor in the margin of the destination card. Ticking more
+ * happens back in the popup that found them.
+ */
+function Shortlist({
+  shortlist,
+  onRemoveStay,
+  onRemoveActivity,
+}: {
+  shortlist: { stays: Stay[]; activities: Activity[] };
+  onRemoveStay: (stayId: string) => void;
+  onRemoveActivity: (activityId: string) => void;
+}) {
+  const rows = [
+    ...shortlist.stays.map((stay) => ({
+      id: stay.id,
+      name: stay.place.name,
+      note: STAY_LABELS[stay.type],
+      remove: () => onRemoveStay(stay.id),
+    })),
+    ...shortlist.activities.map((activity) => ({
+      id: activity.id,
+      name: activity.name,
+      note: ACTIVITY_LABELS[activity.category],
+      remove: () => onRemoveActivity(activity.id),
+    })),
+  ];
+
+  // Nothing shortlisted is the ordinary state for a city added from the
+  // panel rather than the popup, so it renders nothing at all — an
+  // empty "Ideas" heading would be a section announcing its own absence.
+  if (rows.length === 0) return null;
+
+  return (
+    <FieldGroup label="Ideas">
+      <ul className="space-y-1">
+        {rows.map((row) => (
+          <li
+            key={row.id}
+            className="flex items-center gap-2 rounded-lg border border-bark-200 bg-parchment px-2.5 py-1.5"
+          >
+            <span className="min-w-0 flex-1 truncate text-label text-bark-800">
+              {row.name}
+            </span>
+            <span className="shrink-0 text-caption text-bark-600">
+              {row.note}
+            </span>
+            <button
+              type="button"
+              onClick={row.remove}
+              {...labelled(`Remove ${row.name}`)}
+              className="shrink-0 rounded p-1 text-bark-400 transition hover:bg-rust-50 hover:text-rust-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust-500"
+            >
+              <X className="size-3.5" aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </FieldGroup>
   );
 }

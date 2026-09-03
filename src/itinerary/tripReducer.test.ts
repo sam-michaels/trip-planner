@@ -30,7 +30,14 @@ import type {
   RouteMap,
   Trip,
 } from "../model/trip";
-import { coords, deriveLegs, hopId, nightsInStay, totalByCurrency } from "../model/trip";
+import {
+  coords,
+  deriveLegs,
+  hopId,
+  nightsInStay,
+  shortlistFor,
+  totalByCurrency,
+} from "../model/trip";
 import { hopIdOfLeg, tripReducer, type TripState } from "./tripReducer";
 
 // ---------- Fixtures ----------
@@ -1004,5 +1011,67 @@ describe("remove-activity", () => {
       "sight-a",
       "sight-b",
     ]);
+  });
+});
+
+describe("shortlistFor", () => {
+  // A real suggestion never has `name === city`: it is "Hotel Ritz" IN
+  // "Lisbon", and the city is the field that ties it to a destination.
+  const poi = (id: string, name: string, city: string): Place => ({
+    id,
+    name,
+    city,
+    country: "PT",
+    coords: coords(-9.1393, 38.7223),
+  });
+
+  const lisbon = destination("d-lisbon", LISBON);
+  const porto = destination("d-porto", PORTO);
+
+  /** One hotel and one sight in each of the two cities. */
+  const stocked = () => {
+    let state = stateOf(trip([lisbon, porto]));
+
+    for (const place of [
+      poi("ritz", "Hotel Ritz", "Lisbon"),
+      poi("infante", "Hotel Infante", "Porto"),
+    ]) {
+      state = tripReducer(state, { type: "add-stay", place, stayType: "hotel" });
+    }
+
+    for (const place of [
+      poi("tram", "Tram 28", "Lisbon"),
+      poi("livraria", "Livraria Lello", "Porto"),
+    ]) {
+      state = tripReducer(state, {
+        type: "add-activity",
+        place,
+        category: "sight",
+      });
+    }
+
+    return state;
+  };
+
+  it("returns only what was shortlisted for that destination's city", () => {
+    const { trip: t } = stocked();
+
+    expect(shortlistFor(t, lisbon).stays.map((s) => s.place.name)).toEqual([
+      "Hotel Ritz",
+    ]);
+    expect(shortlistFor(t, lisbon).activities.map((a) => a.name)).toEqual([
+      "Tram 28",
+    ]);
+    expect(shortlistFor(t, porto).stays.map((s) => s.place.name)).toEqual([
+      "Hotel Infante",
+    ]);
+  });
+
+  it("gives a destination with nothing two empty lists, not undefined", () => {
+    const madrid = destination("d-madrid", place("madrid", "Madrid", -3.7, 40.4));
+    const { stays, activities } = shortlistFor(stocked().trip, madrid);
+
+    expect(stays).toEqual([]);
+    expect(activities).toEqual([]);
   });
 });
