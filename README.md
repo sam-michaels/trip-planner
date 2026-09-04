@@ -16,26 +16,28 @@ not invented data.
 
 ## Status
 
-| Step | What                                                           | State       |
-| ---- | -------------------------------------------------------------- | ----------- |
-| 1    | Core data model (`trip-model.ts`)                              | **Done**    |
-| 2    | MapLibre renderer — mode-aware leg rendering                   | **Done**    |
-| 3a   | Itinerary editor UI — legs                                     | **Done**    |
-| 3b   | Itinerary editor UI — stays and activities                     | Not started |
-| 4    | Cost rollup + multi-currency display                           | **Done**    |
-| 5    | External data: flight pricing, attractions                     | Not started |
-| 6    | Persistence + deep links out to booking sites                  | Not started |
+| Area                                                              | State       |
+| ------------------------------------------------------------------ | ----------- |
+| Core data model — destinations-first, legs derived (`src/model/trip.ts`) | **Done** |
+| MapLibre renderer — mode-aware leg rendering (`src/map/`)          | **Done**    |
+| Route engine — proposes hop chains between destinations (`src/lib/routing.ts`) | **Done** |
+| Itinerary editor — destinations, hop overrides, drag/keyboard reorder | **Done** |
+| Cost rollup + multi-currency display                               | **Done**    |
+| First-run onboarding — origin, destinations, access mode, stay/activity shortlist | **Done** |
+| Nearby stay/activity suggestions (Overpass)                        | **Done**    |
+| Flight pricing / real fares                                        | Not started |
+| Persistence + deep links out to booking sites                      | Not started |
 
-The project is now scaffolded with Vite + React + TS + Tailwind; `trip-model.ts`
-lives at `src/model/trip.ts` per the structure below, and the map renderer lives
-under `src/map/`.
+Vite + React + TS + Tailwind, no backend. State is a single `Trip` object held
+in `useReducer` in `src/App.tsx`; nothing is written to disk yet, so a reload
+restores `emptyTrip` and the app asks the onboarding questions again. That's
+the next piece of unstarted work, alongside real flight pricing.
 
-Step 3 was split: legs are editable end-to-end and wired to the map, stays and
-activities are not. Nothing is persisted yet — a reload restores `sampleTrip`.
-That's Step 6's job.
-
-Step 4 came forward out of order because the two-currency header it replaced was
-actively misleading — see "Cost is one number" below.
+The model went through one big inversion since the project started: it used to
+store `legs` directly, then moved to storing an ordered list of `destinations`
+with legs *derived* from them by the route engine — see "The one idea to
+understand first" below. Everything past that point describes the current
+shape, not the history.
 
 ---
 
@@ -60,24 +62,62 @@ nights each" — the transport, the dates and the intermediate airports are
 consequences, worked out later and often revised. A leg-first model makes you
 invent a departure time before you can record where you want to go.
 
+### How a screen actually gets built, end to end
+
+1. **`src/App.tsx`** holds the only state: one `Trip` in a `useReducer`
+   (`tripReducer.ts`). It starts as `emptyTrip` — no origin, no destinations —
+   and `Welcome.tsx` (a native `<dialog>`) opens over it asking, in order:
+   where you are, where you're going, how you'd reach the airport, and (once
+   there's at least one destination) a shortlist of stays and activities for
+   it. Answers dispatch straight into the same reducer the rest of the app
+   uses.
+2. Whenever the trip's places change, `useRouteOptions` (in `App.tsx`) calls
+   `proposeTripRoutes()` in **`src/lib/routing.ts`** — the route engine. For
+   each consecutive destination pair it works out plausible ways to get there
+   (ground routes via `plausibleModes.ts` + `geo.ts`'s country/continent
+   table, or an airport-to-airport chain via `hubs.ts` and the flight-route
+   dataset), and returns several ranked options, never a single answer.
+3. `pickRoutes()` collapses those options (using whatever the user picked in
+   the onboarding popup, or the top-ranked one) into a `RouteMap`. That, plus
+   the trip, goes into **`deriveLegs()`** (`src/model/trip.ts`), which
+   produces the actual `Leg[]` for this render — folding in any
+   `Trip.hopOverrides` the user has typed (a price, a booked status, a real
+   departure time) on top of the engine's proposal.
+4. That single `Leg[]` is handed to three independent renderers: **`TripMap`**
+   draws it as GeoJSON on MapLibre, **`ItineraryPanel`** renders it as the
+   editable card list, and **`CostSummary`** sums it into a per-currency
+   total. None of them talk to each other directly — `App.tsx` also tracks
+   which leg/destination is selected, so a click on the map highlights the
+   matching card and vice versa.
+
+Nothing above is persisted. A page reload starts back at `emptyTrip` and asks
+the onboarding questions again.
+
 ---
 
-## Proposed stack
+## Stack
 
-Nothing is locked in past the model. The owner's existing comfort zone, which
-these choices follow:
-
-- **React + Vite + TypeScript + Tailwind** — frontend
+- **React 19 + Vite + TypeScript + Tailwind 4** — frontend, no backend. There
+  is no server anywhere in this repo; every external call below is made
+  directly from the browser.
 - **MapLibre GL JS** — mapping. Chosen over Mapbox GL because it's fully open
-  source with no access token and no usage ceiling. Tiles from a free provider
-  (MapTiler free tier, Protomaps, or self-hosted).
-- **Turf.js** — geospatial math, specifically `greatCircle()` for flight arcs
-- **FastAPI (Python)** — backend, only once external APIs are involved. Steps 2–4
-  need no server at all; do not add one before it earns its place.
-- **Docker** — deployment
+  source with no access token and no usage ceiling. Tiles come from MapTiler's
+  free tier (`VITE_MAPTILER_KEY` in `.env.local`, see `.env.example`).
+- **`@turf/great-circle` + `@turf/helpers`** — just the great-circle arc math
+  for flight paths, not the full Turf.js package.
+- **lucide-react** — icons. Tree-shaken; the map's mode markers are vendored
+  SVG paths copied out of it rather than the React components themselves (see
+  `map/modeSprites.ts` for why).
+- **Vitest + jsdom** — unit tests, 12 test files across the model, route
+  engine, reducer, and a couple of components.
+- **oxlint** — linting.
 
-State management: start with `useState`/`useReducer` on a single `Trip` object.
-Do not reach for Redux/Zustand until there's a demonstrated need.
+State management is a single `useReducer` over one `Trip` object in
+`src/App.tsx`. No Redux/Zustand — there's been no demonstrated need for one.
+A backend (FastAPI was the original plan) and Docker deployment remain
+unbuilt; they were only ever meant to show up once real external APIs
+(flight pricing, persistence) required a server, and that step hasn't
+started yet.
 
 ---
 
@@ -220,7 +260,7 @@ a component simpler.
 
 ---
 
-## Map rendering notes (Step 2)
+## Map rendering notes
 
 Different modes need genuinely different geometry — this is not just styling:
 
@@ -232,8 +272,8 @@ Different modes need genuinely different geometry — this is not just styling:
 - **Train / bus / car** — a real routed polyline is ideal. OSRM's public demo
   server is free for driving profiles but is rate-limited and explicitly not for
   production. There is no free rail-routing service; a styled straight line
-  between stations is acceptable and reads fine at country zoom levels. Do not
-  block Step 2 on solving rail routing.
+  between stations is acceptable and reads fine at country zoom levels. Not
+  worth solving rail routing for.
 - **Ferry / walk** — straight line and short routed line respectively.
 
 Render legs as a single GeoJSON source with a `mode` and `status` property, then
@@ -262,38 +302,36 @@ them after a lucide upgrade.
 
 ---
 
-## Itinerary editor notes (Step 3a)
+## Itinerary editor notes
 
-### Reordering rewrites dates, visibly
+### Reordering is a plain splice, not a date rewrite
 
-> **Being replaced.** This describes the leg editor as it stands while the model
-> inversion lands. Legs had no `order` field, so a drop had to be expressed as a
-> change to `departure`. Destinations carry explicit order, so once the panel is
-> rebuilt around them a drop is a splice and none of this is needed.
+Destinations carry **explicit order** — array position in `Trip.destinations`,
+nothing else (see "Derive, don't store" above). So a drag or a keyboard move
+dispatches a `MOVE_DESTINATION`-style action that does exactly one thing:
+`destinations.splice(from, 1)` then `destinations.splice(to, 0, moved)` in
+`tripReducer.ts`. There is no date to rewrite and no smallest-edit search to
+run — the `reorder.ts` module that used to do that work under the old
+legs-first model is gone.
 
-`src/itinerary/reorder.ts` works out the smallest edit that makes `orderedLegs()`
-agree with where you dropped the card, under two rules:
-
-- **Only the dragged leg is ever edited.** A drop never reaches sideways and
-  shifts a leg you didn't touch. If a position can't be reached by editing the
-  dragged leg alone, nothing changes at all.
-- **Every rewrite is reported**, with a one-click undo. Silently altering a date
-  someone typed is the failure mode this design is most exposed to; the banner is
-  what keeps it from being silent.
-
-While everything is undated — most of the time, early on — order is just array
-order and dragging rewrites nothing.
+Hop overrides survive a reorder for free: they're keyed by `hopId(from, to)`
+(the place pair), not by position, so a booking typed against "Lisbon → Porto"
+stays attached to that journey wherever it ends up in the list.
 
 Drag-and-drop is HTML5 DnD, which touch devices don't fire. `Alt`+`↑`/`↓` on a
-focused card does the same thing through the same reducer action, which also
+focused card does the same move through the same reducer action, which also
 covers keyboard users.
 
 ### Undo is one slot, deliberately
 
-Filled only by the two actions that can lose work you didn't explicitly type: a
-drag that rewrote a date, and a delete. Ordinary field edits don't fill it — you
-can see what you changed, and an undo prompt after every keystroke is noise. If
-this ever needs to become a real history stack, `TripState.undo` is the seam.
+Filled only by `remove-destination` — the one action that can lose work you
+didn't explicitly type. Reordering used to fill it too, back when a drag could
+silently rewrite a date; now that order is explicit array position (see
+above), a drag is nothing but a splice and has nothing to undo. Ordinary field
+edits don't fill the slot either — you can see what you changed, and an undo
+prompt after every keystroke is noise. Removing a destination even leaves its
+`hopOverrides` in place so re-adding it restores exactly what you had. If this
+ever needs to become a real history stack, `TripState.undo` is the seam.
 
 ### Cost is one number
 
@@ -347,7 +385,7 @@ full of alarms about nothing, which is how people learn to ignore the hard gaps
 that do matter. It's now an offer — "Getting across Lisbon", with a button that
 opens a transfer already pointed at both stations and dated to when you land.
 
-### Dependencies added in this step
+### Dependencies
 
 - **lucide-react** — transport-mode and UI icons. Solves having six hand-drawn
   transport SVGs that look homemade next to real typography. Tree-shaken, so only
@@ -377,11 +415,25 @@ of August 2026:
   and ticketing rules with no shared standard. Renfe (Spain) and CP (Portugal)
   expose nothing public. Resellers like All Aboard exist but are B2B
   partnerships. **Plan for manual fare entry plus static estimates.**
-- **Attractions** — OpenTripMap (free, OSM-derived) or Google Places. Start with
-  OpenTripMap; no billing account required.
+- **Attractions and stays** — built against **Overpass** (`lib/poiApi.ts`), not
+  OpenTripMap as originally planned: free, no key, and the same OSM data
+  Nominatim already resolves places against. Trade-off is inconsistent tagging
+  — an unnamed/oddly-tagged POI is dropped rather than guessed at. `ponytail:`
+  comment in that file names OpenTripMap as the upgrade path if OSM's
+  attraction tagging proves too thin.
 - **Geocoding** — Nominatim is free with a strict usage policy (attribution, 1
   req/sec, real User-Agent). Photon is a friendlier alternative for autocomplete.
   The `PlacePicker` debounces 400ms to stay inside that budget.
+- **Home location** — the browser's Geolocation API, reverse-geocoded through
+  Nominatim (`lib/homeLocation.ts`). Never throws: permission denial, timeout,
+  and "found coordinates but no nearby city" are distinct tagged outcomes the
+  onboarding UI reacts to differently, not one generic failure.
+- **Flight route plausibility (not pricing)** — `lib/hubs.ts` (a small curated
+  table of intercontinental hubs) plus `lib/flightRoutes.ts`, generated from
+  OpenFlights' `routes.dat` by `scripts/buildFlightRoutes.ts` into the
+  committed `lib/flightRoutes.data.ts`. This answers "does a flight plausibly
+  exist between these airports", not "what does it cost" — no free source
+  answers that, which is why cost stays manual entry.
 - **REST Countries is dead for browser use.** v3.1 was deprecated in 2026, and
   every endpoint — v3.1 and v5 alike — now 301s to a static file host that sends
   no `Access-Control-Allow-Origin` header, so the redirect fails CORS before the
@@ -404,40 +456,83 @@ building it.
 
 ---
 
-## Suggested structure
+## Structure
 
-Actual, as of Step 3a — `*` marks what's still only planned:
+The actual `src/` tree, grouped by what each piece owns:
 
 ```
 src/
-  App.tsx                # trip state (useReducer) + the list/map split
+  App.tsx                 # the only state: one Trip in useReducer; wires the
+                           # route engine's async results into deriveLegs(),
+                           # holds cross-panel selection (map <-> list)
+  main.tsx                 # Vite entry point
+
   model/
-    trip.ts              # the types + derived functions
-  map/
-    TripMap.tsx          # MapLibre container, selection sync
-    geometry.ts          # leg -> GeoJSON, great-circle arcs
-    style.ts             # mode/status -> paint expressions, layer ids
+    trip.ts                # the types (Trip, Destination, Leg, Place, Money,
+                           # HopOverride...) + derive-don't-store functions:
+                           # deriveLegs(), totalByCurrency(), findGaps()
+
+  onboarding/               # the first-run popup, five questions before the
+    Welcome.tsx             # shell means anything (native <dialog>, WCAG-driven)
+    AccessRow.tsx            # step 3: how you'd reach the airport
+    SuggestionStep.tsx       # steps 4-5: nearby stay/activity shortlist
+
   itinerary/
-    ItineraryPanel.tsx   # the list: ordering, drop targets, where the editor opens
-    LegCard.tsx          # one leg, collapsed
-    LegEditor.tsx        # the leg form
-    LegConnector.tsx     # the strip between two legs; also surfaces gaps
-    PlacePicker.tsx      # trip places + IATA + Nominatim search
-    tripReducer.ts       # every trip edit, plus the undo slot
-    reorder.ts           # drop position -> smallest departure edit
-    plausibleModes.ts    # which modes a leg could actually use
-    datetime.ts          # the wall-clock time format and its helpers
-    duration.ts          # durations, nights, and when NOT to show one
-    labels.ts            # mode colours/icons, status vocabulary, money formatting
-  cost/
-    CostSummary.tsx      # one home-currency total + the breakdown behind it
-    useRates.ts          # FX rates as React state
+    ItineraryPanel.tsx      # the destination list: editor, drop targets, undo
+    DestinationPicker.tsx    # search + add a destination (Nominatim)
+    PlacePicker.tsx          # generic place search used by a few pickers
+    HopEditor.tsx             # the per-hop override form (mode/cost/times/booking)
+    LegCard.tsx / LegConnector.tsx  # one leg, and the strip between two legs
+                             # (nights, gaps, "getting across town" offers)
+    hopOverrides.ts           # HopOverride helpers, keyed by hopId(), not index
+    interludes.ts             # stays/activities squeezed between two legs
+    InspirationGrid.tsx       # popular-destination suggestions
+    tripReducer.ts            # every trip edit: destination + hop-override
+                             # writes only — legs are never state (see its banner)
+    plausibleModes.ts         # which modes a hop could actually use, by distance
+                             # + continent adjacency
+    datetime.ts / duration.ts # wall-clock time format; durations, and when NOT
+                             # to show one (cross-timezone hops)
+    labels.ts                 # mode colours/icons, status vocabulary, money formatting
+    fields.tsx                 # small shared form field components
+
   lib/
-    geo.ts               # distance + country -> continent
-    currency.ts          # FX fetch + conversion, display-time only
-    currencyApi.ts       # country -> currency (vendored table)
-    placesApi.ts         # Nominatim search + OurAirports IATA lookup
+    routing.ts                # THE ROUTE ENGINE — proposeTripRoutes(), the
+                             # RouteMap deriveLegs() consumes. Ground vs. air
+                             # chains, ranked, never a single forced answer.
+    hubs.ts                   # curated intercontinental-hub airports
+    flightRoutes.ts / flightRoutes.data.ts  # OpenFlights-derived route-exists
+                             # lookup (generated by scripts/buildFlightRoutes.ts)
+    geo.ts                    # distance + country -> continent adjacency
+    homeLocation.ts            # Geolocation API -> reverse-geocoded Place
+    placesApi.ts               # Nominatim search + OurAirports nearest-airport lookup
+    poiApi.ts                  # Overpass: nearby stays/activities
+    popularDestinations.ts     # static list backing InspirationGrid
+    currency.ts / currencyApi.ts  # FX fetch + conversion (display-time only);
+                             # vendored country -> currency table
+    countries.ts               # country code/name data
+
+  map/
+    TripMap.tsx                # MapLibre container, selection sync, bounds-fitting
+    geometry.ts                 # leg -> GeoJSON, great-circle arcs
+    style.ts                    # mode/status -> paint expressions, layer ids
+    path.ts                     # per-leg pixel path (antimeridian-safe)
+    vehicles.ts                  # animated vehicle markers travelling each leg
+    modeSprites.ts                # vendored lucide icon paths, rasterized for MapLibre
+    MotionControl.ts              # the map's play/pause-motion control
+
+  cost/
+    CostSummary.tsx        # one home-currency total + the per-currency
+                           # breakdown behind a disclosure
+    useRates.ts             # FX rates as React state, wrapping lib/currency.ts
+
+scripts/
+  buildFlightRoutes.ts     # build-time generator: OpenFlights routes.dat ->
+                           # lib/flightRoutes.data.ts. Run manually, output committed.
 ```
+
+No `legs` field anywhere in state — every module above that touches a `Leg`
+receives it as an argument, freshly computed from `deriveLegs()`.
 
 ---
 
